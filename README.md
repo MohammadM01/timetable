@@ -26,24 +26,26 @@ The system supports Excel file uploads to streamline data input. Below are the e
 1. Teacher Periods (teacher_periods.xlsx) 🧑‍🏫
 This file contains teacher details, including their names, weekly teaching periods, and daily maximum periods.
 Example Format:
+
  <img width="975" height="230" alt="Screenshot 2025-08-09 165719" src="https://github.com/user-attachments/assets/98ae9d21-a64a-4a8b-ba3e-6bea090b8599" />
 •	id: Unique identifier for each teacher.
 •	name: Full name of the teacher.
 •	weekly_periods: Total teaching periods per week.
 •	daily_max_periods: Maximum periods a teacher can teach in a single day.
-2. Class List (class_list_corrected.xlsx) 📚
+3. Class List (class_list_corrected.xlsx) 📚
 This file lists classes with their standards, divisions, and full names.
 Example Format:
- 
+
+<img width="832" height="240" alt="Screenshot 2025-08-09 165856" src="https://github.com/user-attachments/assets/902b33d2-503f-4b1b-884c-08fe1d21b52b" /> 
 •	id: Unique identifier for each class.
 •	standard: The grade or standard (e.g., V, VI, VII).
 •	division: The division within the standard (e.g., G1, G2).
 •	full_name: Concatenated name of the standard and division (e.g., VG1).
-3. Subject Periods (subject_periods_updated.xlsx) 📖
+4. Subject Periods (subject_periods_updated.xlsx) 📖
 This file specifies subjects for each standard, their weekly periods, and whether consecutive periods are required.
 Example Format:
- 
 
+<img width="877" height="233" alt="Screenshot 2025-08-09 173128" src="https://github.com/user-attachments/assets/71732de5-4f9d-4de8-98e3-3737862801ae" />
 •	id: Unique identifier for each subject entry.
 •	standard: The grade or standard (e.g., V, VI, VII).
 •	subject_name: Name of the subject (e.g., URDU, ENGLISH).
