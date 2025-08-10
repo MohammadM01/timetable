@@ -100,7 +100,7 @@ ________________________________________
 •	Cloud Integration ☁️: Store data in a cloud-based database for remote access.
 •	Advanced Analytics 📈: Provide insights into teacher workloads and class schedules.
 ________________________________________
-Contributions 🤝
-•	Mohammad Mulla -
-•	Shifa Khan -
+Contributors 🤝
+•	
+•	
 
