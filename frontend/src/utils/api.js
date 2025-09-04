@@ -266,3 +266,50 @@ export const updatePrincipalPeriods = async (periodsData) => {
 
   return response.json();
 };
+
+// New timetable API functions
+export const getAvailableClasses = async () => {
+  const response = await fetch(`${API_BASE_URL}/timetable/available-classes`);
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Failed to fetch available classes');
+  return data;
+};
+
+export const generateTimetableWithConfig = async (config) => {
+  const response = await fetch(`${API_BASE_URL}/timetable/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config)
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Failed to generate timetable');
+  return data;
+};
+
+export const getTimetableStatus = async () => {
+  const response = await fetch(`${API_BASE_URL}/timetable/status`);
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Failed to fetch timetable status');
+  return data;
+};
+
+export const getClassTimetable = async (classId) => {
+  const response = await fetch(`${API_BASE_URL}/timetable/class/${classId}`);
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Failed to fetch class timetable');
+  return data;
+};
+
+export const getTeacherTimetable = async (teacherId) => {
+  const response = await fetch(`${API_BASE_URL}/timetable/teacher/${teacherId}`);
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Failed to fetch teacher timetable');
+  return data;
+};
+
+export const getSchoolTimetable = async () => {
+  const response = await fetch(`${API_BASE_URL}/timetable/school`);
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Failed to fetch school timetable');
+  return data;
+};

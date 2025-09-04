@@ -1,23 +1,43 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { generateTimetable, getTimetable } from '../utils/api';
+import { generateTimetable, getTimetable, getAvailableClasses, generateTimetableWithConfig } from '../utils/api';
 import { exportToExcel } from '../utils/excelGenerator';
 import { SchoolContext } from '../SchoolContext';
 
 const GenerateTimetable = () => {
   const { teachers: existingTeachers } = useContext(SchoolContext);
   const [timetable, setTimetable] = useState([]);
+  const [classes, setClasses] = useState([]);
+  const [selectedClasses, setSelectedClasses] = useState([]);
+  const [generationType, setGenerationType] = useState('all');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
   const [viewMode, setViewMode] = useState('teacher'); // 'teacher' or 'class'
+  const [config, setConfig] = useState({
+    daysPerWeek: 5,
+    periodsPerDay: 8,
+    periodDuration: 45,
+    startTime: '08:00'
+  });
 
   // Define days and periods
   const days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
   const maxPeriods = 9; // Maximum number of periods in a day
 
-  // Load timetable on component mount and after generation
+  // Load timetable and classes on component mount
   useEffect(() => {
     loadTimetable();
+    fetchAvailableClasses();
   }, []);
+
+  const fetchAvailableClasses = async () => {
+    try {
+      const data = await getAvailableClasses();
+      setClasses(data);
+    } catch (err) {
+      setError('Failed to fetch available classes');
+    }
+  };
 
   const loadTimetable = async () => {
     try {
@@ -30,19 +50,45 @@ const GenerateTimetable = () => {
     }
   };
 
+  const handleClassSelection = (classId, checked) => {
+    if (checked) {
+      setSelectedClasses([...selectedClasses, classId]);
+    } else {
+      setSelectedClasses(selectedClasses.filter(id => id !== classId));
+    }
+  };
+
+  const handleSelectAll = () => {
+    if (selectedClasses.length === classes.length) {
+      setSelectedClasses([]);
+    } else {
+      setSelectedClasses(classes.map(c => c.id));
+    }
+  };
+
   const handleGenerate = async () => {
     setLoading(true);
     setError('');
+    setMessage('');
+
     try {
-      await generateTimetable();
-      console.log('Timetable generated successfully');
-      const data = await getTimetable();
-      console.log('Fetched new timetable data:', data);
-      setTimetable(data);
-      setLoading(false);
+      const payload = {
+        config,
+        selectedClasses,
+        generationType,
+        viewType: 'student'
+      };
+
+      const data = await generateTimetableWithConfig(payload);
+      setMessage(`✅ ${data.message}`);
+      // Reset selections
+      setSelectedClasses([]);
+      setGenerationType('all');
+      // Reload timetable
+      loadTimetable();
     } catch (err) {
-      console.error('Failed to generate timetable:', err);
-      setError('Failed to generate timetable');
+      setError(err.message || 'Failed to generate timetable');
+    } finally {
       setLoading(false);
     }
   };
@@ -105,15 +151,190 @@ const GenerateTimetable = () => {
   const teacherSchedules = timetable.length > 0 ? getTeacherTimetable() : [];
   console.log('Teacher schedules:', teacherSchedules);
 
+  const groupedClasses = classes.reduce((acc, cls) => {
+    if (!acc[cls.standard]) {
+      acc[cls.standard] = [];
+    }
+    acc[cls.standard].push(cls);
+    return acc;
+  }, {});
+
   return (
     <div className="p-6">
       <h2 className="text-3xl font-bold text-purple-600 mb-6">Generate Timetable</h2>
       <div className="bg-white p-6 rounded-lg shadow-lg space-y-6">
+        
+        {/* Generation Type Selection */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-gray-800">Generation Type</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div 
+              className={`p-4 border-2 rounded-lg cursor-pointer transition-colors ${
+                generationType === 'all' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+              }`}
+              onClick={() => setGenerationType('all')}
+            >
+              <div className="text-center">
+                <div className="text-2xl mb-2">🏫</div>
+                <h4 className="font-semibold">All Classes</h4>
+                <p className="text-sm text-gray-600">Generate for all classes</p>
+              </div>
+            </div>
+            
+            <div 
+              className={`p-4 border-2 rounded-lg cursor-pointer transition-colors ${
+                generationType === 'selected' ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:border-gray-300'
+              }`}
+              onClick={() => setGenerationType('selected')}
+            >
+              <div className="text-center">
+                <div className="text-2xl mb-2">📚</div>
+                <h4 className="font-semibold">Selected Classes</h4>
+                <p className="text-sm text-gray-600">Choose specific classes</p>
+              </div>
+            </div>
+            
+            <div 
+              className={`p-4 border-2 rounded-lg cursor-pointer transition-colors ${
+                generationType === 'standard' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-gray-300'
+              }`}
+              onClick={() => setGenerationType('standard')}
+            >
+              <div className="text-center">
+                <div className="text-2xl mb-2">🎯</div>
+                <h4 className="font-semibold">By Standard</h4>
+                <p className="text-sm text-gray-600">Generate by grade level</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Class Selection */}
+        {generationType === 'selected' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-800">Select Classes</h3>
+              <button 
+                onClick={handleSelectAll}
+                className="bg-gray-200 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-300 transition duration-300"
+              >
+                {selectedClasses.length === classes.length ? 'Deselect All' : 'Select All'}
+              </button>
+            </div>
+            
+            <div className="max-h-60 overflow-y-auto border rounded-lg p-4 bg-gray-50">
+              {Object.entries(groupedClasses).map(([standard, standardClasses]) => (
+                <div key={standard} className="mb-4">
+                  <h4 className="font-semibold text-gray-700 mb-2">{standard}</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {standardClasses.map((cls) => (
+                      <div key={cls.id} className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id={cls.id}
+                          checked={selectedClasses.includes(cls.id)}
+                          onChange={(e) => handleClassSelection(cls.id, e.target.checked)}
+                          className="rounded border-gray-300"
+                        />
+                        <label htmlFor={cls.id} className="text-sm text-gray-700">
+                          {cls.division}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            {selectedClasses.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
+                  {selectedClasses.length} class(es) selected
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Configuration */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-gray-800">School Configuration</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <label htmlFor="daysPerWeek" className="block text-sm font-medium text-gray-700 mb-1">
+                Days per Week
+              </label>
+              <input
+                id="daysPerWeek"
+                type="number"
+                min="1"
+                max="7"
+                value={config.daysPerWeek}
+                onChange={(e) => setConfig({...config, daysPerWeek: parseInt(e.target.value)})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label htmlFor="periodsPerDay" className="block text-sm font-medium text-gray-700 mb-1">
+                Periods per Day
+              </label>
+              <input
+                id="periodsPerDay"
+                type="number"
+                min="1"
+                max="12"
+                value={config.periodsPerDay}
+                onChange={(e) => setConfig({...config, periodsPerDay: parseInt(e.target.value)})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label htmlFor="periodDuration" className="block text-sm font-medium text-gray-700 mb-1">
+                Period Duration (min)
+              </label>
+              <input
+                id="periodDuration"
+                type="number"
+                min="30"
+                max="90"
+                value={config.periodDuration}
+                onChange={(e) => setConfig({...config, periodDuration: parseInt(e.target.value)})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label htmlFor="startTime" className="block text-sm font-medium text-gray-700 mb-1">
+                Start Time
+              </label>
+              <input
+                id="startTime"
+                type="time"
+                value={config.startTime}
+                onChange={(e) => setConfig({...config, startTime: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Messages */}
+        {message && (
+          <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
+            {message}
+          </div>
+        )}
+        
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+            {error}
+          </div>
+        )}
+
         <div className="flex justify-between items-center mb-4">
           <button
             onClick={handleGenerate}
             className="bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 transition duration-300"
-            disabled={loading}
+            disabled={loading || (generationType === 'selected' && selectedClasses.length === 0)}
           >
             {loading ? 'Generating...' : 'Generate Timetable'}
           </button>
@@ -127,8 +348,6 @@ const GenerateTimetable = () => {
             </button>
           )}
         </div>
-
-        {error && <p className="text-red-600 text-center">{error}</p>}
         
         {timetable.length === 0 ? (
           <p className="text-center text-gray-500">No timetable data available. Click "Generate Timetable" to create one.</p>

@@ -95,18 +95,14 @@ const SubjectAssignment = () => {
         return;
       }
 
-      // Create the payload
+      // Create the payload - backend expects teacherId and subjectId
       const payload = {
-        subject_id: parseInt(newAssignment.subject_id),
-        class_id: parseInt(newAssignment.class_id)
+        teacherId: selectedTeacher, // Use teacherId (not teacher_id)
+        subjectId: newAssignment.subject_id, // Use subjectId (not subject_id)
+        preferredPeriods: [],
+        avoidPeriods: [],
+        consecutivePeriods: false
       };
-
-      // Add either teacher_id or principal_id based on the isPrincipal flag
-      if (teacher.isPrincipal) {
-        payload.principal_id = 1;
-      } else {
-        payload.teacher_id = selectedTeacher; // selectedTeacher is already a number
-      }
 
       console.log('Sending payload:', payload);
 

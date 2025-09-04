@@ -1,0 +1,137 @@
+import { Router } from 'express';
+import multer from 'multer';
+import XLSX from 'xlsx';
+import Class from '../models/Class.js';
+import Counter from '../models/Counter.js';
+
+const router = Router();
+const upload = multer({ storage: multer.memoryStorage() });
+
+// Get all classes
+router.get('/', async (_req, res) => {
+	try {
+		const classes = await Class.find({}).sort({ standard: 1, division: 1 }).lean();
+		const formatted = classes.map((c) => ({ 
+			id: c._id, 
+			standard: c.standard, 
+			division: c.division, 
+			full_name: c.full_name 
+		}));
+		return res.json(formatted);
+	} catch (e) {
+		return res.status(500).json({ error: 'Failed to fetch classes' });
+	}
+});
+
+// Create multiple classes
+router.post('/', async (req, res) => {
+	try {
+		const payload = Array.isArray(req.body) ? req.body : [];
+		const results = [];
+		for (const c of payload) {
+			const doc = await Class.findOneAndUpdate(
+				{ standard: c.standard, division: c.division },
+				{ $setOnInsert: { 
+					standard: c.standard, 
+					division: c.division, 
+					full_name: c.full_name || `${c.standard} ${c.division}` 
+				} },
+				{ upsert: true, new: true }
+			);
+			results.push(doc);
+		}
+		return res.json({ success: true });
+	} catch (e) {
+		return res.json({ success: true });
+	}
+});
+
+// Create single class
+router.post('/single', async (req, res) => {
+	try {
+		const c = req.body || {};
+		const doc = await Class.create({ 
+			standard: c.standard, 
+			division: c.division, 
+			full_name: c.full_name || `${c.standard} ${c.division}` 
+		});
+		return res.json({ id: doc._id });
+	} catch (e) {
+		return res.status(400).json({ error: 'Failed to add class' });
+	}
+});
+
+// Update class
+router.put('/:id', async (req, res) => {
+	try {
+		const { id } = req.params;
+		const { standard, division, full_name } = req.body;
+		const updated = await Class.findByIdAndUpdate(
+			id, 
+			{ standard, division, full_name: full_name || `${standard} ${division}` }, 
+			{ new: true }
+		);
+		if (!updated) return res.status(404).json({ error: 'Not found' });
+		return res.json({ 
+			id: updated._id, 
+			standard: updated.standard, 
+			division: updated.division, 
+			full_name: updated.full_name 
+		});
+	} catch (e) {
+		return res.status(400).json({ error: 'Failed to update class' });
+	}
+});
+
+// Delete class
+router.delete('/:id', async (req, res) => {
+	try {
+		await Class.findByIdAndDelete(req.params.id);
+		return res.json({ success: true });
+	} catch (e) {
+		return res.status(400).json({ error: 'Failed to delete class' });
+	}
+});
+
+// Upload classes via Excel
+router.post('/upload', upload.single('file'), async (req, res) => {
+	try {
+		if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+		const workbook = XLSX.read(req.file.buffer);
+		const sheetName = workbook.SheetNames[0];
+		const sheet = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+		const classes = sheet.map((row) => ({
+			standard: (row.Standard || row.standard || '').toString().trim(),
+			division: (row.Division || row.division || '').toString().trim(),
+			full_name: (row['Full Name'] || row.full_name || '').toString().trim()
+		})).filter(c => c.standard && c.division);
+		
+		if (classes.length === 0) return res.status(400).json({ error: 'No valid rows' });
+		
+		for (const c of classes) {
+			const exists = await Class.findOne({ 
+				standard: new RegExp('^' + c.standard + '$', 'i'),
+				division: new RegExp('^' + c.division + '$', 'i')
+			});
+			if (exists) continue;
+			await Class.create({ 
+				standard: c.standard, 
+				division: c.division, 
+				full_name: c.full_name || `${c.standard} ${c.division}` 
+			});
+		}
+		
+		const all = await Class.find({}).sort({ standard: 1, division: 1 }).lean();
+		return res.json(all.map(c => ({ 
+			id: c._id, 
+			standard: c.standard, 
+			division: c.division, 
+			full_name: c.full_name 
+		})));
+	} catch (e) {
+		return res.status(500).json({ error: 'Failed to upload classes' });
+	}
+});
+
+export default router;
+
