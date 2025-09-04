@@ -327,6 +327,105 @@ router.get('/teachers/:standard/:subjectName', async (req, res) => {
 	}
 });
 
+// Get teacher timetable
+router.get('/teacher/:id', async (req, res) => {
+	try {
+		const { id } = req.params;
+		const timetable = await Timetable.findOne({ generationStatus: 'completed' }).sort({ generatedAt: -1 });
+		
+		if (!timetable) {
+			return res.status(404).json({ error: 'No timetable found. Please generate a timetable first.' });
+		}
+
+		const teacherSchedule = timetable.teacherSchedule[id];
+		if (!teacherSchedule) {
+			return res.status(404).json({ error: 'Teacher not found in timetable' });
+		}
+
+		// Get teacher details
+		const teacher = await Teacher.findOne({ id: Number(id) });
+		if (!teacher) {
+			return res.status(404).json({ error: 'Teacher not found' });
+		}
+
+		// Format the response
+		const formattedTimetable = {
+			teacher: {
+				id: teacher.id,
+				name: teacher.name,
+				weeklyPeriods: teacher.weeklyPeriods,
+				dailyPeriods: teacher.dailyPeriods
+			},
+			config: timetable.schoolConfig,
+			schedule: {}
+		};
+
+		// Convert schedule to array format for easier frontend consumption
+		const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+		for (let dayIndex = 0; dayIndex < days.length; dayIndex++) {
+			const day = days[dayIndex];
+			formattedTimetable.schedule[day] = [];
+			
+			for (let period = 1; period <= timetable.schoolConfig.periodsPerDay; period++) {
+				const periodData = teacherSchedule[dayIndex + 1] && teacherSchedule[dayIndex + 1][period];
+				formattedTimetable.schedule[day].push({
+					period: period,
+					class: periodData ? periodData.className : null,
+					subject: periodData ? periodData.subject : null,
+					classId: periodData ? periodData.classId : null,
+					isFree: !periodData
+				});
+			}
+		}
+
+		return res.json(formattedTimetable);
+		
+	} catch (error) {
+		console.error('Error fetching teacher timetable:', error);
+		return res.status(500).json({ error: 'Failed to fetch teacher timetable' });
+	}
+});
+
+// Get all teacher timetables
+router.get('/teachers', async (req, res) => {
+	try {
+		const timetable = await Timetable.findOne({ generationStatus: 'completed' }).sort({ generatedAt: -1 });
+		
+		if (!timetable) {
+			return res.status(404).json({ error: 'No timetable found. Please generate a timetable first.' });
+		}
+
+		// Get all teachers
+		const teachers = await Teacher.find({}).sort({ id: 1 }).lean();
+		
+		const teacherTimetables = {};
+		
+		for (const teacher of teachers) {
+			const teacherSchedule = timetable.teacherSchedule[teacher.id];
+			if (teacherSchedule) {
+				teacherTimetables[teacher.id] = {
+					teacher: {
+						id: teacher.id,
+						name: teacher.name,
+						weeklyPeriods: teacher.weeklyPeriods,
+						dailyPeriods: teacher.dailyPeriods
+					},
+					schedule: teacherSchedule
+				};
+			}
+		}
+
+		return res.json({
+			config: timetable.schoolConfig,
+			teacherTimetables
+		});
+		
+	} catch (error) {
+		console.error('Error fetching teacher timetables:', error);
+		return res.status(500).json({ error: 'Failed to fetch teacher timetables' });
+	}
+});
+
 export default router;
 
 

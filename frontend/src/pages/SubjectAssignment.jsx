@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { SchoolContext } from '../SchoolContext';
+import { deleteAllTeacherSubjects } from '../utils/api';
 
 const SubjectAssignment = () => {
   const { teachers: existingTeachers } = useContext(SchoolContext);
@@ -170,8 +171,49 @@ const SubjectAssignment = () => {
     return assignments.filter(a => 
       teacher.isPrincipal 
         ? a.principal_id === 1
-        : a.teacher_id === teacherId
+        : a.teacherId === teacherId
     );
+  };
+
+  // Get classes for a specific subject (division-wise)
+  const getClassesForSubject = (subjectId) => {
+    const subject = subjects.find(s => s.id === subjectId);
+    if (!subject) return [];
+
+    // Filter classes that match the subject's standard
+    return classes.filter(cls => cls.standard === subject.standard);
+  };
+
+  // Handle subject change - reset class selection
+  const handleSubjectChange = (subjectId) => {
+    setNewAssignment(prev => ({ 
+      ...prev, 
+      subject_id: subjectId,
+      class_id: '' // Reset class selection when subject changes
+    }));
+  };
+
+  const handleDeleteAllAssignments = async () => {
+    if (assignments.length === 0) {
+      setError('No assignments to delete');
+      return;
+    }
+
+    const confirmMessage = `Are you sure you want to delete ALL ${assignments.length} teacher-subject assignments? This action cannot be undone.`;
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      setError('');
+      setSuccess('');
+      
+      const result = await deleteAllTeacherSubjects();
+      setAssignments([]);
+      setSuccess(result.message || `Successfully deleted all ${result.deletedCount} assignments`);
+    } catch (err) {
+      setError(err.message || 'Failed to delete all assignments');
+    }
   };
 
   if (loading) {
@@ -223,8 +265,18 @@ const SubjectAssignment = () => {
       {/* Teacher's Assignments */}
       {selectedTeacher !== null && (
         <div className="space-y-6">
-          {/* Add Assignment Button */}
-          <div className="flex justify-end">
+          {/* Add Assignment Button and Delete All */}
+          <div className="flex justify-between items-center">
+            <div>
+              {assignments.length > 0 && (
+                <button
+                  onClick={handleDeleteAllAssignments}
+                  className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-300 transition duration-200"
+                >
+                  Delete All Assignments ({assignments.length})
+                </button>
+              )}
+            </div>
             <button
               onClick={() => setShowAddForm(!showAddForm)}
               className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-4 focus:ring-purple-300"
@@ -243,7 +295,7 @@ const SubjectAssignment = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
                     <select
                       value={newAssignment.subject_id}
-                      onChange={(e) => setNewAssignment(prev => ({ ...prev, subject_id: e.target.value }))}
+                      onChange={(e) => handleSubjectChange(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500"
                       required
                     >
@@ -263,9 +315,10 @@ const SubjectAssignment = () => {
                       onChange={(e) => setNewAssignment(prev => ({ ...prev, class_id: e.target.value }))}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500"
                       required
+                      disabled={!newAssignment.subject_id}
                     >
-                      <option value="">Select Class</option>
-                      {classes.map(cls => (
+                      <option value="">{newAssignment.subject_id ? 'Select Class' : 'Select Subject First'}</option>
+                      {newAssignment.subject_id && getClassesForSubject(newAssignment.subject_id).map(cls => (
                         <option key={`c_${cls.id}`} value={String(cls.id)}>{cls.full_name}</option>
                       ))}
                     </select>
@@ -296,8 +349,8 @@ const SubjectAssignment = () => {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {getTeacherAssignments(selectedTeacher).map(assignment => {
-                  const subject = subjects.find(s => s.id === assignment.subject_id);
-                  const cls = classes.find(c => c.id === assignment.class_id);
+                  const subject = subjects.find(s => s.id === assignment.subjectId);
+                  const cls = classes.find(c => c.id === assignment.classId);
                   
                   return (
                     <tr key={`a_${assignment.id}`}>

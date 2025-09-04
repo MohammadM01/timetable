@@ -1,6 +1,6 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { SchoolContext } from '../SchoolContext';
-import { saveClasses, deleteClass, updateClass, uploadClasses } from '../utils/api';
+import { saveClasses, deleteClass, updateClass, uploadClasses, deleteAllClasses } from '../utils/api';
 import { FaTrash, FaFileUpload, FaDownload } from 'react-icons/fa';
 import * as XLSX from 'xlsx';
 
@@ -89,6 +89,31 @@ const ClassSetup = () => {
       }
     } catch (err) {
       setError(err.message || 'Failed to delete class');
+    }
+  };
+
+  const handleDeleteAllClasses = async () => {
+    if (existingClasses.length === 0) {
+      setError('No classes to delete');
+      return;
+    }
+
+    const confirmMessage = `Are you sure you want to delete ALL ${existingClasses.length} classes? This action cannot be undone.`;
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      setError('');
+      setSuccess('');
+      
+      const result = await deleteAllClasses();
+      setSuccess(result.message || `Successfully deleted all ${result.deletedCount} classes`);
+      
+      // Clear the classes list
+      addClasses([]);
+    } catch (err) {
+      setError(err.message || 'Failed to delete all classes');
     }
   };
 
@@ -260,7 +285,17 @@ const ClassSetup = () => {
 
       {/* Display Existing Classes */}
       <div className="bg-white p-6 rounded-lg shadow-lg mt-8">
-        <h3 className="text-xl font-semibold text-blue-600 mb-4">Existing Classes</h3>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-semibold text-blue-600">Existing Classes</h3>
+          {existingClasses.length > 0 && (
+            <button
+              onClick={handleDeleteAllClasses}
+              className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-300 transition duration-200"
+            >
+              Delete All ({existingClasses.length})
+            </button>
+          )}
+        </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">

@@ -35,10 +35,12 @@ export const SchoolProvider = ({ children }) => {
       const response = await fetch('http://localhost:5000/api/teachers');
       if (!response.ok) throw new Error('Failed to fetch teachers');
       const data = await response.json();
+      console.log('Raw teachers data from API:', data);
       
       // Fetch principal
       const principalResponse = await fetch('http://localhost:5000/api/principals');
       const principalData = await principalResponse.json();
+      console.log('Raw principal data from API:', principalData);
       
       // Start with regular teachers, ensure IDs are numbers
       let allTeachers = data
@@ -79,6 +81,8 @@ export const SchoolProvider = ({ children }) => {
         id: t.id,
         name: t.name,
         isPrincipal: t.isPrincipal,
+        weeklyPeriods: t.weeklyPeriods,
+        dailyPeriods: t.dailyPeriods,
         type: typeof t.id
       })));
 

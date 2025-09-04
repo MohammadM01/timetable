@@ -8,21 +8,119 @@ import Principal from '../models/Principal.js';
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
+// Test Excel parsing without saving
+router.post('/test-parse', upload.single('file'), async (req, res) => {
+	try {
+		if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+		
+		const workbook = XLSX.read(req.file.buffer);
+		const sheetName = workbook.SheetNames[0];
+		const sheet = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+		
+		// Auto-detect column names
+		let detectedColumns = {};
+		if (sheet.length > 0) {
+			const headers = Object.keys(sheet[0]);
+			console.log('Test - Detected headers:', headers);
+			
+			const nameCol = headers.find(h => 
+				h.toLowerCase().includes('name') || 
+				h.toLowerCase().includes('teacher')
+			);
+			if (nameCol) detectedColumns.name = nameCol;
+			
+			const weeklyCol = headers.find(h => 
+				h.toLowerCase().includes('weekly') && 
+				(h.toLowerCase().includes('period') || h.toLowerCase().includes('periods'))
+			);
+			if (weeklyCol) detectedColumns.weekly = weeklyCol;
+			
+			const dailyCol = headers.find(h => 
+				(h.toLowerCase().includes('daily') || h.toLowerCase().includes('max')) && 
+				(h.toLowerCase().includes('period') || h.toLowerCase().includes('periods'))
+			);
+			if (dailyCol) detectedColumns.daily = dailyCol;
+		}
+		
+		// Parse first 3 rows for testing
+		const testResults = sheet.slice(0, 3).map((row, index) => {
+			const name = row.Name || row.name || row.NAME || row['Teacher Name'] || row['teacher_name'] || row['TEACHER NAME'] || row['Name'] || 
+						(detectedColumns.name ? row[detectedColumns.name] : '') || '';
+			
+			const weeklyPeriods = row['Weekly Periods'] || row.weeklyPeriods || row['WEEKLY PERIODS'] || row['weekly_periods'] || 
+								 row['Weekly'] || row.weekly || row['WEEKLY'] || row['Weekly Period'] || row['weekly_period'] || 
+								 row['Weekly Periods per Week'] || row['weekly_periods_per_week'] || 
+								 (detectedColumns.weekly ? row[detectedColumns.weekly] : null) || 0;
+			
+			const dailyPeriods = row['Daily Periods'] || row.dailyPeriods || row['DAILY PERIODS'] || row['daily_periods'] || 
+								row['Daily'] || row.daily || row['DAILY'] || row['Daily Period'] || row['daily_period'] || 
+								row['Daily Max Periods'] || row['daily_max_periods'] || row['Max Daily Periods'] || row['max_daily_periods'] ||
+								row['Daily Maximum'] || row['daily_maximum'] || row['Max Periods'] || row['max_periods'] || 
+								(detectedColumns.daily ? row[detectedColumns.daily] : null) || 0;
+			
+			return {
+				rowIndex: index,
+				rawRow: row,
+				detectedColumns: detectedColumns,
+				parsed: {
+					name: name.toString().trim(),
+					weeklyPeriods: Number(weeklyPeriods) || 0,
+					dailyPeriods: Number(dailyPeriods) || 0
+				}
+			};
+		});
+		
+		return res.json({
+			headers: sheet.length > 0 ? Object.keys(sheet[0]) : [],
+			detectedColumns: detectedColumns,
+			testResults: testResults
+		});
+	} catch (e) {
+		console.error('Test parse error:', e);
+		return res.status(500).json({ error: 'Failed to parse Excel file', details: e.message });
+	}
+});
+
+// Test endpoint to check teacher data
+router.get('/test', async (_req, res) => {
+	try {
+		// Ensure all teachers have rowOrder (migration for existing data)
+		await Teacher.updateMany({ rowOrder: { $exists: false } }, { $set: { rowOrder: 0 } });
+		
+		const teachers = await Teacher.find({}).sort({ rowOrder: 1, id: 1 }).lean();
+		const principal = await Principal.findOne({}).lean();
+		return res.json({
+			teachers: teachers.map(t => ({ id: t.id, name: t.name, weeklyPeriods: t.weeklyPeriods, dailyPeriods: t.dailyPeriods })),
+			principal: principal ? { name: principal.name, weekly_periods: principal.weekly_periods, daily_max_periods: principal.daily_max_periods } : null
+		});
+	} catch (e) {
+		return res.status(500).json({ error: 'Failed to fetch test data' });
+	}
+});
+
 // Get all teachers (excluding principal)
 router.get('/', async (_req, res) => {
 	try {
+		// First, ensure all teachers have rowOrder (migration for existing data)
+		await Teacher.updateMany({ rowOrder: { $exists: false } }, { $set: { rowOrder: 0 } });
+		
 		const [teachers, principal] = await Promise.all([
-			Teacher.find({}).sort({ name: 1 }).lean(),
+			Teacher.find({}).sort({ rowOrder: 1, id: 1 }).lean(),
 			Principal.findOne({}).lean()
 		]);
-		const formatted = teachers.map((t) => ({ id: t.id, name: t.name, weeklyPeriods: t.weeklyPeriods, dailyPeriods: t.dailyPeriods }));
+		const formatted = teachers.map((t) => {
+			console.log('Teacher data:', { id: t.id, name: t.name, weeklyPeriods: t.weeklyPeriods, dailyPeriods: t.dailyPeriods });
+			return { id: t.id, name: t.name, weeklyPeriods: t.weeklyPeriods, dailyPeriods: t.dailyPeriods };
+		});
 		if (principal) {
+			console.log('Principal data:', principal);
 			const principalRow = {
 				id: 'principal',
 				name: principal.name,
 				weeklyPeriods: principal.weekly_periods,
 				dailyPeriods: principal.daily_max_periods
 			};
+			console.log('Formatted principal:', principalRow);
 			// Place principal first. If a teacher with same name exists, do not duplicate.
 			const exists = formatted.some(t => (t.name || '').toLowerCase() === (principalRow.name || '').toLowerCase());
 			const list = exists ? formatted : [principalRow, ...formatted];
@@ -41,9 +139,10 @@ router.post('/', async (req, res) => {
 		const results = [];
 		for (const t of payload) {
 			const counter = await Counter.findOneAndUpdate({ key: 'teacher' }, { $inc: { seq: 1 } }, { upsert: true, new: true });
+			// For manual creation, use the counter as rowOrder to maintain sequence
 			const doc = await Teacher.findOneAndUpdate(
 				{ name: t.name },
-				{ $setOnInsert: { id: counter.seq, name: t.name, weeklyPeriods: Number(t.weeklyPeriods) || 0, dailyPeriods: Number(t.dailyPeriods) || 0 } },
+				{ $setOnInsert: { id: counter.seq, rowOrder: counter.seq, name: t.name, weeklyPeriods: Number(t.weeklyPeriods) || 0, dailyPeriods: Number(t.dailyPeriods) || 0 } },
 				{ upsert: true, new: true }
 			);
 			results.push(doc);
@@ -59,10 +158,48 @@ router.post('/single', async (req, res) => {
 	try {
 		const t = req.body || {};
 		const counter = await Counter.findOneAndUpdate({ key: 'teacher' }, { $inc: { seq: 1 } }, { upsert: true, new: true });
-		const doc = await Teacher.create({ id: counter.seq, name: t.name, weeklyPeriods: Number(t.weeklyPeriods) || 0, dailyPeriods: Number(t.dailyPeriods) || 0 });
+		const doc = await Teacher.create({ id: counter.seq, rowOrder: counter.seq, name: t.name, weeklyPeriods: Number(t.weeklyPeriods) || 0, dailyPeriods: Number(t.dailyPeriods) || 0 });
 		return res.json({ id: doc.id });
 	} catch (e) {
 		return res.status(400).json({ error: 'Failed to add teacher' });
+	}
+});
+
+// Delete all teachers (excluding principal)
+router.delete('/all', async (req, res) => {
+	try {
+		const result = await Teacher.deleteMany({});
+		// Reset the counter
+		await Counter.findOneAndUpdate({ key: 'teacher' }, { seq: 0 }, { upsert: true });
+		return res.json({ 
+			success: true, 
+			message: `Deleted ${result.deletedCount} teachers`,
+			deletedCount: result.deletedCount
+		});
+	} catch (e) {
+		return res.status(500).json({ error: 'Failed to delete all teachers' });
+	}
+});
+
+// Delete all teachers including principal
+router.delete('/all-including-principal', async (req, res) => {
+	try {
+		console.log('Delete all teachers including principal endpoint called');
+		const [teacherResult, principalResult] = await Promise.all([
+			Teacher.deleteMany({}),
+			Principal.deleteMany({})
+		]);
+		// Reset the counter
+		await Counter.findOneAndUpdate({ key: 'teacher' }, { seq: 0 }, { upsert: true });
+		console.log(`Deleted ${teacherResult.deletedCount} teachers and ${principalResult.deletedCount} principal(s)`);
+		return res.json({ 
+			success: true, 
+			message: `Deleted ${teacherResult.deletedCount} teachers and ${principalResult.deletedCount} principal(s)`,
+			deletedCount: teacherResult.deletedCount + principalResult.deletedCount
+		});
+	} catch (e) {
+		console.error('Error deleting all teachers and principal:', e);
+		return res.status(500).json({ error: 'Failed to delete all teachers and principal' });
 	}
 });
 
@@ -89,6 +226,36 @@ router.delete('/:id', async (req, res) => {
 	}
 });
 
+// Download template
+router.get('/template', async (req, res) => {
+	try {
+		const template = [
+			{
+				Name: 'John Doe',
+				'Weekly Periods': 20,
+				'Daily Periods': 5
+			},
+			{
+				Name: 'Jane Smith',
+				'Weekly Periods': 18,
+				'Daily Periods': 4
+			}
+		];
+
+		const ws = XLSX.utils.json_to_sheet(template);
+		const wb = XLSX.utils.book_new();
+		XLSX.utils.book_append_sheet(wb, ws, 'Teachers');
+		
+		const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+		
+		res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+		res.setHeader('Content-Disposition', 'attachment; filename=teachers_template.xlsx');
+		res.send(buffer);
+	} catch (e) {
+		return res.status(500).json({ error: 'Failed to generate template' });
+	}
+});
+
 // Upload teachers via Excel
 router.post('/upload', upload.single('file'), async (req, res) => {
 	try {
@@ -96,19 +263,125 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 		const workbook = XLSX.read(req.file.buffer);
 		const sheetName = workbook.SheetNames[0];
 		const sheet = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
-		const teachers = sheet.map((row) => ({
-			name: (row.Name || row.name || '').toString().trim(),
-			weeklyPeriods: Number(row['Weekly Periods'] || row.weeklyPeriods || 0),
-			dailyPeriods: Number(row['Daily Periods'] || row.dailyPeriods || 0)
-		})).filter(t => t.name);
+		
+		// Auto-detect column names if sheet has data
+		let detectedColumns = {};
+		if (sheet.length > 0) {
+			const headers = Object.keys(sheet[0]);
+			console.log('Detected headers:', headers);
+			
+			// Find name column
+			const nameCol = headers.find(h => 
+				h.toLowerCase().includes('name') || 
+				h.toLowerCase().includes('teacher')
+			);
+			if (nameCol) detectedColumns.name = nameCol;
+			
+			// Find weekly periods column
+			const weeklyCol = headers.find(h => 
+				h.toLowerCase().includes('weekly') && 
+				(h.toLowerCase().includes('period') || h.toLowerCase().includes('periods'))
+			);
+			if (weeklyCol) detectedColumns.weekly = weeklyCol;
+			
+			// Find daily periods column
+			const dailyCol = headers.find(h => 
+				(h.toLowerCase().includes('daily') || h.toLowerCase().includes('max')) && 
+				(h.toLowerCase().includes('period') || h.toLowerCase().includes('periods'))
+			);
+			if (dailyCol) detectedColumns.daily = dailyCol;
+			
+			console.log('Auto-detected columns:', detectedColumns);
+		}
+		const teachers = sheet.map((row, index) => {
+			// Preserve the Excel row order (index + 1 to start from 1)
+			const excelRowOrder = index + 1;
+			// Debug: Log the first few rows to see the actual column names
+			if (index < 3) {
+				console.log(`Row ${index}:`, Object.keys(row));
+				console.log(`Row ${index} data:`, row);
+			}
+			
+			// Try multiple variations of column names with more comprehensive checking
+			const name = row.Name || row.name || row.NAME || row['Teacher Name'] || row['teacher_name'] || row['TEACHER NAME'] || row['Name'] || 
+						(detectedColumns.name ? row[detectedColumns.name] : '') || '';
+			
+			// More comprehensive weekly periods checking
+			const weeklyPeriods = row['Weekly Periods'] || row.weeklyPeriods || row['WEEKLY PERIODS'] || row['weekly_periods'] || 
+								 row['Weekly'] || row.weekly || row['WEEKLY'] || row['Weekly Period'] || row['weekly_period'] || 
+								 row['Weekly Periods per Week'] || row['weekly_periods_per_week'] || 
+								 (detectedColumns.weekly ? row[detectedColumns.weekly] : null) || 0;
+			
+			// More comprehensive daily periods checking
+			const dailyPeriods = row['Daily Periods'] || row.dailyPeriods || row['DAILY PERIODS'] || row['daily_periods'] || 
+								row['Daily'] || row.daily || row['DAILY'] || row['Daily Period'] || row['daily_period'] || 
+								row['Daily Max Periods'] || row['daily_max_periods'] || row['Max Daily Periods'] || row['max_daily_periods'] ||
+								row['Daily Maximum'] || row['daily_maximum'] || row['Max Periods'] || row['max_periods'] || 
+								(detectedColumns.daily ? row[detectedColumns.daily] : null) || 0;
+			
+			// Debug: Log the parsed values for first few rows
+			if (index < 3) {
+				console.log(`Parsed Row ${index}:`, {
+					name: name,
+					weeklyPeriods: weeklyPeriods,
+					dailyPeriods: dailyPeriods,
+					weeklyType: typeof weeklyPeriods,
+					dailyType: typeof dailyPeriods
+				});
+			}
+			
+			// Convert to numbers with better error handling
+			let weeklyNum = 0;
+			let dailyNum = 0;
+			
+			try {
+				weeklyNum = Number(weeklyPeriods);
+				if (isNaN(weeklyNum)) weeklyNum = 0;
+			} catch (e) {
+				console.log('Error parsing weekly periods:', weeklyPeriods, e);
+				weeklyNum = 0;
+			}
+			
+			try {
+				dailyNum = Number(dailyPeriods);
+				if (isNaN(dailyNum)) dailyNum = 0;
+			} catch (e) {
+				console.log('Error parsing daily periods:', dailyPeriods, e);
+				dailyNum = 0;
+			}
+			
+			// Debug: Log the final converted values
+			if (index < 3) {
+				console.log(`Final Row ${index}:`, {
+					name: name.toString().trim(),
+					weeklyPeriods: weeklyNum,
+					dailyPeriods: dailyNum
+				});
+			}
+			
+			return {
+				name: name.toString().trim(),
+				weeklyPeriods: weeklyNum,
+				dailyPeriods: dailyNum,
+				rowOrder: excelRowOrder
+			};
+		}).filter(t => t.name);
+		
+		// Debug: Log the processed teachers data
+		console.log('Processed teachers:', teachers.slice(0, 3));
+		
 		if (teachers.length === 0) return res.status(400).json({ error: 'No valid rows' });
 		for (const t of teachers) {
 			const exists = await Teacher.findOne({ name: new RegExp('^' + t.name + '$', 'i') });
 			if (exists) continue;
 			const counter = await Counter.findOneAndUpdate({ key: 'teacher' }, { $inc: { seq: 1 } }, { upsert: true, new: true });
-			await Teacher.create({ id: counter.seq, name: t.name, weeklyPeriods: t.weeklyPeriods, dailyPeriods: t.dailyPeriods });
+			const newTeacher = await Teacher.create({ id: counter.seq, rowOrder: t.rowOrder, name: t.name, weeklyPeriods: t.weeklyPeriods, dailyPeriods: t.dailyPeriods });
+			console.log('Created teacher:', newTeacher);
 		}
-		const all = await Teacher.find({}).sort({ name: 1 }).lean();
+		// Ensure all teachers have rowOrder (migration for existing data)
+		await Teacher.updateMany({ rowOrder: { $exists: false } }, { $set: { rowOrder: 0 } });
+		
+		const all = await Teacher.find({}).sort({ rowOrder: 1, id: 1 }).lean();
 		return res.json(all.map(t => ({ id: t.id, name: t.name, weeklyPeriods: t.weeklyPeriods, dailyPeriods: t.dailyPeriods })));
 	} catch (e) {
 		return res.status(500).json({ error: 'Failed to upload teachers' });

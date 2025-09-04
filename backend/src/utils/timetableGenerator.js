@@ -287,6 +287,16 @@ class TimetableGenerator {
 		
 		return await timetableDoc.save();
 	}
+
+	// Get teacher timetable from generated schedule
+	getTeacherTimetable(teacherId) {
+		return this.teacherSchedule[teacherId] || {};
+	}
+
+	// Get all teacher timetables
+	getAllTeacherTimetables() {
+		return this.teacherSchedule;
+	}
 }
 
 export default TimetableGenerator;

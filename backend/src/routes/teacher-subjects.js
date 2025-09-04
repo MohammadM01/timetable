@@ -271,4 +271,19 @@ router.post('/bulk', async (req, res) => {
 	}
 });
 
+// Delete all teacher-subject mappings
+router.delete('/all', async (req, res) => {
+	try {
+		const result = await TeacherSubject.deleteMany({});
+		return res.json({ 
+			success: true, 
+			message: `Deleted ${result.deletedCount} teacher-subject mappings`,
+			deletedCount: result.deletedCount
+		});
+	} catch (error) {
+		console.error('Error deleting all teacher-subject mappings:', error);
+		return res.status(500).json({ error: 'Failed to delete all teacher-subject mappings' });
+	}
+});
+
 export default router;

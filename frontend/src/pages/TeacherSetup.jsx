@@ -8,7 +8,8 @@ import {
   deleteTeacher, 
   updateTeacher,
   uploadTeachers,
-  updatePrincipalPeriods
+  updatePrincipalPeriods,
+  deleteAllTeachersIncludingPrincipal
 } from '../utils/api';
 import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
@@ -38,21 +39,43 @@ const TeacherSetup = () => {
     const file = acceptedFiles[0];
     if (file) {
       try {
+        setError(''); // Clear previous errors
+        setSuccess('Uploading file...');
+        
+        console.log('Uploading file:', file.name);
+        
         // Upload the Excel file for teachers
-        await uploadTeachers(file);
+        const uploadResult = await uploadTeachers(file);
+        console.log('Upload result:', uploadResult);
+        
+        // Check if the upload result has the expected data
+        if (!uploadResult || !Array.isArray(uploadResult)) {
+          throw new Error('Invalid response from server. Expected array of teachers.');
+        }
+        
+        // Check if any teachers have weekly periods
+        const teachersWithPeriods = uploadResult.filter(t => t.weeklyPeriods > 0);
+        const teachersWithoutPeriods = uploadResult.filter(t => t.weeklyPeriods === 0 || t.weeklyPeriods === undefined);
+        
+        console.log('Teachers with periods:', teachersWithPeriods);
+        console.log('Teachers without periods:', teachersWithoutPeriods);
+        
+        if (teachersWithoutPeriods.length > 0) {
+          setError(`Warning: ${teachersWithoutPeriods.length} teachers have no weekly periods. Check your Excel file format.`);
+        }
         
         // Fetch updated data
         const teachersData = await fetchTeachers();
+        console.log('Fetched teachers data:', teachersData);
         
         // Store imported teachers and show principal selection modal
         setImportedTeachers(teachersData);
         setShowPrincipalSelectModal(true);
         
-        setSuccess('Teachers imported successfully. Please select a principal.');
-        setError('');
+        setSuccess(`Teachers imported successfully! ${uploadResult.length} teachers processed. Please select a principal.`);
       } catch (err) {
         console.error('Error uploading file:', err);
-        setError(err.message || 'Failed to upload file');
+        setError(`Upload failed: ${err.message || 'Failed to upload file'}`);
         setSuccess('');
       }
     }
@@ -94,6 +117,26 @@ const TeacherSetup = () => {
     },
     maxFiles: 1
   });
+
+  const downloadTemplate = () => {
+    const template = [
+      {
+        Name: 'John Doe',
+        'Weekly Periods': 20,
+        'Daily Periods': 5
+      },
+      {
+        Name: 'Jane Smith',
+        'Weekly Periods': 18,
+        'Daily Periods': 4
+      }
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(template);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Teachers');
+    XLSX.writeFile(wb, 'teachers_template.xlsx');
+  };
 
   // Find principal in existing teachers
   useEffect(() => {
@@ -360,6 +403,49 @@ const TeacherSetup = () => {
     }
   };
 
+
+  const handleDeleteAllIncludingPrincipal = async () => {
+    const totalCount = existingTeachers.length;
+    
+    if (totalCount === 0) {
+      setError('No teachers or principal to delete');
+      return;
+    }
+
+    const confirmMessage = `⚠️ WARNING: This will delete ALL ${totalCount} teachers AND the principal!\n\nThis action cannot be undone and will completely clear all teacher data.\n\nAre you absolutely sure you want to continue?`;
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      setError('');
+      setSuccess('');
+      
+      const result = await deleteAllTeachersIncludingPrincipal();
+      setSuccess(result.message || `Successfully deleted all ${result.deletedCount} teachers and principal`);
+      
+      // Clear all data
+      addTeachers([]);
+      setPrincipal({ name: 'Principal', weeklyPeriods: 0, dailyPeriods: 5 });
+      
+      // Fetch updated data to ensure consistency
+      const teachersResponse = await fetch('http://localhost:5000/api/teachers');
+      if (teachersResponse.ok) {
+        const teachersData = await teachersResponse.json();
+        addTeachers(teachersData.filter(t => t.id !== 'principal'));
+        
+        // Update principal data if it exists
+        const principalData = teachersData.find(t => t.id === 'principal');
+        if (principalData) {
+          setPrincipal(principalData);
+          addPrincipal(principalData);
+        }
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to delete all teachers and principal');
+    }
+  };
+
   return (
     <div className="p-6 space-y-8">
       <div className="flex justify-between items-center">
@@ -378,9 +464,97 @@ const TeacherSetup = () => {
         </div>
       )}
 
+      {/* Debug Section - Show raw data */}
+      {existingTeachers.length > 0 && (
+        <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-6 rounded">
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="font-bold text-yellow-800">Debug Info - Teacher Data:</h3>
+            <div className="flex space-x-2">
+              <button
+                onClick={async () => {
+                  try {
+                    const response = await fetch('http://localhost:5000/api/teachers/test');
+                    const data = await response.json();
+                    console.log('Test API Response:', data);
+                    setSuccess('Check console for test API response');
+                  } catch (err) {
+                    setError('Test API failed: ' + err.message);
+                  }
+                }}
+                className="px-3 py-1 bg-yellow-600 text-white text-xs rounded hover:bg-yellow-700"
+              >
+                Test API
+              </button>
+              <button
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = '.xlsx,.xls';
+                  input.onchange = async (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                      try {
+                        const formData = new FormData();
+                        formData.append('file', file);
+                        const response = await fetch('http://localhost:5000/api/teachers/test-parse', {
+                          method: 'POST',
+                          body: formData
+                        });
+                        const data = await response.json();
+                        console.log('Test Parse Response:', data);
+                        setSuccess('Check console for test parse response');
+                      } catch (err) {
+                        setError('Test parse failed: ' + err.message);
+                      }
+                    }
+                  };
+                  input.click();
+                }}
+                className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+              >
+                Test Parse
+              </button>
+            </div>
+          </div>
+          <div className="text-sm text-yellow-700 max-h-40 overflow-y-auto">
+            {existingTeachers.slice(0, 3).map((teacher, index) => (
+              <div key={index} className="mb-2 p-2 bg-yellow-100 rounded">
+                <strong>Teacher {index + 1}:</strong><br/>
+                Name: {teacher.name}<br/>
+                Weekly Periods: {teacher.weeklyPeriods} (type: {typeof teacher.weeklyPeriods})<br/>
+                Daily Periods: {teacher.dailyPeriods} (type: {typeof teacher.dailyPeriods})<br/>
+                ID: {teacher.id} (type: {typeof teacher.id})
+              </div>
+            ))}
+            {existingTeachers.length > 3 && (
+              <div className="text-xs text-yellow-600">
+                ... and {existingTeachers.length - 3} more teachers
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Excel Upload Section */}
       <div className="bg-white p-6 rounded-lg shadow-lg">
-        <h3 className="text-xl font-semibold text-blue-600 mb-4">Import Teachers</h3>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-semibold text-blue-600">Import Teachers</h3>
+          <button
+            onClick={downloadTemplate}
+            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-300 transition duration-200"
+          >
+            Download Template
+          </button>
+        </div>
+        <div className="mb-4 p-4 bg-blue-50 rounded-lg">
+          <h4 className="font-semibold text-blue-800 mb-2">Required Excel Format:</h4>
+          <div className="text-sm text-blue-700">
+            <p><strong>Column 1:</strong> Name (or Teacher Name)</p>
+            <p><strong>Column 2:</strong> Weekly Periods (or Weekly)</p>
+            <p><strong>Column 3:</strong> Daily Periods (or Daily)</p>
+            <p className="mt-2 text-blue-600">Download the template above to see the exact format!</p>
+          </div>
+        </div>
         <div
           {...getRootProps()}
           className={`border-2 border-dashed p-8 rounded-lg text-center cursor-pointer transition-colors duration-200 ${
@@ -446,7 +620,18 @@ const TeacherSetup = () => {
 
       {/* Display Existing Teachers */}
       <div className="bg-white p-6 rounded-lg shadow-lg">
-        <h3 className="text-xl font-semibold text-blue-600 mb-4">Existing Teachers</h3>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-semibold text-blue-600">Existing Teachers</h3>
+          {existingTeachers.length > 0 && (
+            <button
+              onClick={handleDeleteAllIncludingPrincipal}
+              className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-300 transition duration-200"
+              title="Delete ALL teachers AND principal (complete reset)"
+            >
+              Delete All ({existingTeachers.length})
+            </button>
+          )}
+        </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">

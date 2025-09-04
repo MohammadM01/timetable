@@ -93,6 +93,20 @@ router.delete('/:id', async (req, res) => {
 	}
 });
 
+// Delete all classes
+router.delete('/all', async (req, res) => {
+	try {
+		const result = await Class.deleteMany({});
+		return res.json({ 
+			success: true, 
+			message: `Deleted ${result.deletedCount} classes`,
+			deletedCount: result.deletedCount
+		});
+	} catch (e) {
+		return res.status(500).json({ error: 'Failed to delete all classes' });
+	}
+});
+
 // Upload classes via Excel
 router.post('/upload', upload.single('file'), async (req, res) => {
 	try {

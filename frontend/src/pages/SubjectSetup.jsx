@@ -1,6 +1,6 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { SchoolContext } from '../SchoolContext';
-import { saveSubjects, fetchSubjects, deleteSubject, updateSubject } from '../utils/api';
+import { saveSubjects, fetchSubjects, deleteSubject, updateSubject, deleteAllSubjects } from '../utils/api';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 
@@ -88,6 +88,29 @@ const SubjectSetup = () => {
       setSuccess('Subject deleted successfully');
     } catch (err) {
       setError(err.message || 'Failed to delete subject');
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    if (existingSubjects.length === 0) {
+      setError('No subjects to delete');
+      return;
+    }
+
+    const confirmMessage = `Are you sure you want to delete ALL ${existingSubjects.length} subjects? This action cannot be undone.`;
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      setError('');
+      setSuccess('');
+      
+      const result = await deleteAllSubjects();
+      setExistingSubjects([]);
+      setSuccess(result.message || `Successfully deleted all ${result.deletedCount} subjects`);
+    } catch (err) {
+      setError(err.message || 'Failed to delete all subjects');
     }
   };
 
@@ -390,7 +413,17 @@ const SubjectSetup = () => {
 
       {/* Display Existing Subjects */}
       <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-xl text-[#3b82f6] font-medium mb-6">Existing Subjects</h2>
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl text-[#3b82f6] font-medium">Existing Subjects</h2>
+          {existingSubjects.length > 0 && (
+            <button
+              onClick={handleDeleteAll}
+              className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-300 transition duration-200"
+            >
+              Delete All ({existingSubjects.length})
+            </button>
+          )}
+        </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">

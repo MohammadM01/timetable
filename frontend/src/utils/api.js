@@ -313,3 +313,49 @@ export const getSchoolTimetable = async () => {
   if (!response.ok) throw new Error(data.error || 'Failed to fetch school timetable');
   return data;
 };
+
+// Bulk delete functions
+export const deleteAllSubjects = async () => {
+  const response = await fetch(`${API_BASE_URL}/subjects/all`, {
+    method: 'DELETE',
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Failed to delete all subjects');
+  return data;
+};
+
+export const deleteAllTeachers = async () => {
+  const response = await fetch(`${API_BASE_URL}/teachers/all`, {
+    method: 'DELETE',
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Failed to delete all teachers');
+  return data;
+};
+
+export const deleteAllTeachersIncludingPrincipal = async () => {
+  const response = await fetch(`${API_BASE_URL}/teachers/all-including-principal`, {
+    method: 'DELETE',
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Failed to delete all teachers and principal');
+  return data;
+};
+
+export const deleteAllClasses = async () => {
+  const response = await fetch(`${API_BASE_URL}/classes/all`, {
+    method: 'DELETE',
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Failed to delete all classes');
+  return data;
+};
+
+export const deleteAllTeacherSubjects = async () => {
+  const response = await fetch(`${API_BASE_URL}/teacher-subjects/all`, {
+    method: 'DELETE',
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Failed to delete all teacher-subject mappings');
+  return data;
+};
