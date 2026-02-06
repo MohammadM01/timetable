@@ -82,7 +82,10 @@ export const deleteClass = async (classId) => {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' }
   });
-  if (!response.ok) throw new Error('Failed to delete class');
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Failed to delete class');
+  }
   return response.json();
 };
 
@@ -140,7 +143,7 @@ export const generateTimetable = async () => {
 };
 
 export const getTimetable = async () => {
-  const response = await fetch(`${API_BASE_URL}/timetable`);
+  const response = await fetch(`${API_BASE_URL}/timetable/school`);
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || 'Failed to fetch timetable');
   return data;
@@ -348,6 +351,13 @@ export const deleteAllClasses = async () => {
   });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || 'Failed to delete all classes');
+  return data;
+};
+
+export const getTeacherSubjects = async () => {
+  const response = await fetch(`${API_BASE_URL}/teacher-subjects`);
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Failed to fetch teacher-subject mappings');
   return data;
 };
 

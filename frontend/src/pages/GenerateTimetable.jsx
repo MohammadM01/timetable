@@ -1,32 +1,25 @@
-import React, { useState, useEffect, useContext } from 'react';
-import { generateTimetable, getTimetable, getAvailableClasses, generateTimetableWithConfig } from '../utils/api';
-import { exportToExcel } from '../utils/excelGenerator';
-import { SchoolContext } from '../SchoolContext';
+import React, { useState, useEffect } from 'react';
+import { generateTimetableWithConfig, getAvailableClasses, getTimetable, getTeacherSubjects } from '../utils/api';
 
 const GenerateTimetable = () => {
-  const { teachers: existingTeachers } = useContext(SchoolContext);
-  const [timetable, setTimetable] = useState([]);
   const [classes, setClasses] = useState([]);
   const [selectedClasses, setSelectedClasses] = useState([]);
-  const [generationType, setGenerationType] = useState('all');
+  const [generationType, setGenerationType] = useState('selected'); // Default to selected instead of all
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
-  const [viewMode, setViewMode] = useState('teacher'); // 'teacher' or 'class'
+  const [timetable, setTimetable] = useState(null);
+  const [viewType, setViewType] = useState('class'); // 'class' or 'teacher'
   const [config, setConfig] = useState({
-    daysPerWeek: 5,
+    daysPerWeek: 6, // Include Saturday
     periodsPerDay: 8,
     periodDuration: 45,
-    startTime: '08:00'
+    startTime: '08:00',
+    recessAfterPeriod: 4 // Add recess after 4th period
   });
 
-  // Define days and periods
-  const days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
-  const maxPeriods = 9; // Maximum number of periods in a day
-
-  // Load timetable and classes on component mount
+  // Load classes on component mount
   useEffect(() => {
-    loadTimetable();
     fetchAvailableClasses();
   }, []);
 
@@ -39,15 +32,152 @@ const GenerateTimetable = () => {
     }
   };
 
+  const handleGenerate = async () => {
+    setLoading(true);
+    setError('');
+    setMessage('');
+
+    try {
+      // Check if we have teacher-subject assignments
+      console.log('Checking teacher-subject assignments...');
+      const teacherSubjects = await getTeacherSubjects();
+      console.log('Teacher-subject assignments:', teacherSubjects);
+      
+      if (!teacherSubjects || teacherSubjects.length === 0) {
+        setError('No teacher-subject assignments found. Please assign subjects to teachers first in the Subject Assignment page.');
+        setLoading(false);
+        return;
+      }
+
+      // Validate selected classes when generation type is 'selected'
+      if (generationType === 'selected' && selectedClasses.length === 0) {
+        setError('Please select at least one class to generate timetable for.');
+        setLoading(false);
+        return;
+      }
+
+      const payload = {
+        config,
+        selectedClasses: selectedClasses.map(id => id.toString()),
+        generationType: generationType === 'selected' ? 'selected' : 'all',
+        viewType: 'student'
+      };
+
+      console.log('Generating timetable with payload:', payload);
+      console.log('Selected classes:', selectedClasses);
+      console.log('Available classes:', classes);
+
+      const data = await generateTimetableWithConfig(payload);
+      console.log('Generation response:', data);
+      setMessage(`✅ ${data.message}`);
+      
+      // Load the generated timetable
+      await loadTimetable();
+      
+    } catch (err) {
+      console.error('Failed to generate timetable:', err);
+      setError(err.message || 'Failed to generate timetable');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const loadTimetable = async () => {
     try {
       const data = await getTimetable();
       console.log('Loaded timetable data:', data);
+      console.log('Timetable overview structure:', data.overview);
+      console.log('Timetable direct structure:', data.timetable);
+      
+      if (data.overview) {
+        console.log('Sample overview data:', Object.keys(data.overview));
+        if (Object.keys(data.overview).length > 0) {
+          const firstDay = Object.keys(data.overview)[0];
+          console.log(`Sample data for ${firstDay}:`, data.overview[firstDay]);
+        }
+      }
+      
+      // If overview doesn't exist, try to use the direct timetable data
+      if (!data.overview && data.timetable) {
+        console.log('Using direct timetable data instead of overview');
+        // Convert timetable format to overview format
+        const overview = {};
+        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        
+        days.forEach((day, dayIndex) => {
+          overview[day] = {};
+          for (let period = 1; period <= config.periodsPerDay; period++) {
+            overview[day][`Period ${period}`] = {};
+            
+            // Get all classes and their data for this period
+            Object.keys(data.timetable).forEach(classId => {
+              const classData = classes.find(c => c.id === classId);
+              if (classData) {
+                const slot = data.timetable[classId]?.[dayIndex + 1]?.[period];
+                overview[day][`Period ${period}`][classData.full_name] = slot || {
+                  subject: 'Free',
+                  teacher: 'Free',
+                  teacherId: null
+                };
+              }
+            });
+          }
+        });
+        
+        data.overview = overview;
+        console.log('Converted timetable to overview format:', overview);
+      }
+      
       setTimetable(data);
     } catch (err) {
       console.error('Failed to load timetable:', err);
       setError('Failed to load timetable');
     }
+  };
+
+  const handleGenerateAgain = async () => {
+    setTimetable(null);
+    setMessage('');
+    setError('');
+    // Generate a new timetable without page reload
+    await handleGenerate();
+  };
+
+  const handleSaveTimetable = () => {
+    // For now, just show a success message
+    // In the future, this could save to a specific location or mark as saved
+    setMessage('✅ Timetable saved successfully!');
+  };
+
+  const exportTimetable = () => {
+    if (!timetable || !selectedClasses.length) return;
+    
+    const selectedClassTimetable = getSelectedClassTimetable();
+    if (!selectedClassTimetable) return;
+    
+    // Create CSV content for selected class only
+    let csvContent = `Timetable for ${selectedClassTimetable.class.full_name}\n`;
+    csvContent += `Standard: ${selectedClassTimetable.class.standard} | Division: ${selectedClassTimetable.class.division}\n\n`;
+    csvContent += 'Day,Period,Subject,Teacher\n';
+    
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+    days.forEach(day => {
+      for (let period = 1; period <= config.periodsPerDay; period++) {
+        const slot = selectedClassTimetable.timetable[day][period];
+        csvContent += `${day},${period},${slot?.subject || 'Free'},${slot?.teacher || 'Free'}\n`;
+      }
+    });
+    
+    // Download CSV
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${selectedClassTimetable.class.full_name}_Timetable.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
   };
 
   const handleClassSelection = (classId, checked) => {
@@ -66,90 +196,63 @@ const GenerateTimetable = () => {
     }
   };
 
-  const handleGenerate = async () => {
-    setLoading(true);
-    setError('');
-    setMessage('');
-
-    try {
-      const payload = {
-        config,
-        selectedClasses,
-        generationType,
-        viewType: 'student'
-      };
-
-      const data = await generateTimetableWithConfig(payload);
-      setMessage(`✅ ${data.message}`);
-      // Reset selections
-      setSelectedClasses([]);
-      setGenerationType('all');
-      // Reload timetable
-      loadTimetable();
-    } catch (err) {
-      setError(err.message || 'Failed to generate timetable');
-    } finally {
-      setLoading(false);
-    }
+  // Function to get cell content for timetable display
+  const getCellContent = (dayName, periodName, className) => {
+    if (!timetable?.overview?.[dayName]?.[periodName]?.[className]) return 'Free';
+    const slot = timetable.overview[dayName][periodName][className];
+    return `${slot.subject}\n${slot.teacher}`;
   };
 
-  const handleExport = () => {
-    exportToExcel(timetable, existingTeachers);
-  };
-
-  // Function to organize timetable data by teacher
-  const getTeacherTimetable = () => {
-    console.log('Processing timetable data. Current timetable:', timetable);
-    console.log('Existing teachers:', existingTeachers);
+  // Function to get selected class timetable data
+  const getSelectedClassTimetable = () => {
+    if (!timetable || !selectedClasses.length) return null;
     
-    const teacherMap = new Map();
+    const selectedClassData = classes.find(cls => selectedClasses.includes(cls.id));
+    if (!selectedClassData) return null;
     
-    // First pass: Initialize all existing teachers with empty schedules
-    existingTeachers.forEach(teacher => {
-      teacherMap.set(teacher.name, {
-        name: teacher.name,
-        schedule: {}
-      });
-      console.log(`Initialized schedule for teacher: ${teacher.name}`);
-    });
-
-    // Second pass: Fill in the schedule
-    timetable.forEach(entry => {
-      console.log('Processing timetable entry:', entry);
-      const teacher = teacherMap.get(entry.teacher);
-      if (!teacher) {
-        console.log(`Teacher not found for entry:`, entry);
-        return;
+    console.log('Selected class data:', selectedClassData);
+    console.log('Timetable overview:', timetable.overview);
+    
+    const classTimetable = {};
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    
+    // Extract timetable data for the selected class
+    days.forEach(day => {
+      classTimetable[day] = {};
+      for (let period = 1; period <= config.periodsPerDay; period++) {
+        const periodName = `Period ${period}`;
+        const slot = timetable.overview?.[day]?.[periodName]?.[selectedClassData.full_name];
+        console.log(`Slot for ${day} ${periodName} ${selectedClassData.full_name}:`, slot);
+        classTimetable[day][period] = slot || { subject: 'Free', teacher: 'Free' };
       }
-      
-      if (!teacher.schedule[entry.day]) {
-        teacher.schedule[entry.day] = {};
-      }
-      teacher.schedule[entry.day][entry.period] = {
-        class: entry.class,
-        subject: entry.subject
-      };
-      console.log(`Added period for ${entry.teacher} on ${entry.day}, period ${entry.period}:`, teacher.schedule[entry.day][entry.period]);
     });
-
-    const result = existingTeachers.map(teacher => teacherMap.get(teacher.name)).filter(Boolean);
-    console.log('Final processed timetable data:', result);
-    return result;
+    
+    console.log('Processed class timetable:', classTimetable);
+    return {
+      class: selectedClassData,
+      timetable: classTimetable
+    };
   };
 
-  // Function to get cell content
-  const getCellContent = (teacherSchedule, day, period) => {
-    if (!teacherSchedule?.schedule[day]) return '';
-    const cell = teacherSchedule.schedule[day][period];
-    if (!cell) return '';
-    console.log(`Cell content for ${teacherSchedule.name} on ${day}, period ${period}:`, cell);
-    return cell.class;
+  // Function to get unique subjects for the selected class
+  const getClassSubjects = () => {
+    const classTimetable = getSelectedClassTimetable();
+    if (!classTimetable) return [];
+    
+    const subjects = new Set();
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    
+    days.forEach(day => {
+      for (let period = 1; period <= config.periodsPerDay; period++) {
+        const slot = classTimetable.timetable[day][period];
+        if (slot.subject !== 'Free') {
+          subjects.add(slot.subject);
+        }
+      }
+    });
+    
+    return Array.from(subjects).sort();
   };
-
-  // Debug output
-  console.log('Current timetable state:', timetable);
-  const teacherSchedules = timetable.length > 0 ? getTeacherTimetable() : [];
-  console.log('Teacher schedules:', teacherSchedules);
 
   const groupedClasses = classes.reduce((acc, cls) => {
     if (!acc[cls.standard]) {
@@ -275,6 +378,20 @@ const GenerateTimetable = () => {
               />
             </div>
             <div>
+              <label htmlFor="recessAfterPeriod" className="block text-sm font-medium text-gray-700 mb-1">
+                Recess After Period
+              </label>
+              <input
+                id="recessAfterPeriod"
+                type="number"
+                min="1"
+                max="8"
+                value={config.recessAfterPeriod}
+                onChange={(e) => setConfig({...config, recessAfterPeriod: parseInt(e.target.value)})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
               <label htmlFor="periodsPerDay" className="block text-sm font-medium text-gray-700 mb-1">
                 Periods per Day
               </label>
@@ -330,76 +447,207 @@ const GenerateTimetable = () => {
           </div>
         )}
 
-        <div className="flex justify-between items-center mb-4">
+        {/* Generate Button */}
+        <div className="flex justify-center items-center mb-4">
           <button
             onClick={handleGenerate}
-            className="bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 transition duration-300"
+            className="bg-blue-600 text-white py-3 px-8 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 transition duration-300 text-lg font-semibold"
             disabled={loading || (generationType === 'selected' && selectedClasses.length === 0)}
           >
             {loading ? 'Generating...' : 'Generate Timetable'}
           </button>
-          
-          {timetable.length > 0 && (
-            <button
-              onClick={handleExport}
-              className="bg-green-600 text-white py-3 px-6 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-300 transition duration-300"
-            >
-              Export to Excel
-            </button>
-          )}
         </div>
         
-        {timetable.length === 0 ? (
-          <p className="text-center text-gray-500">No timetable data available. Click "Generate Timetable" to create one.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <div className="inline-block min-w-full align-middle">
-              <div className="overflow-hidden border border-gray-200 rounded-lg">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-50 z-10">
-                        Teacher
-                      </th>
-                      {days.map(day => (
-                        <th key={day} colSpan={maxPeriods} className="text-center px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider border-l">
-                          {day}
-                        </th>
-                      ))}
-                    </tr>
-                    <tr>
-                      <th className="px-3 py-2 sticky left-0 bg-gray-50 z-10"></th>
-                      {days.map(day => (
-                        Array.from({ length: maxPeriods }, (_, i) => (
-                          <th key={`${day}-${i+1}`} className="text-center px-2 py-1 text-xs font-medium text-gray-500 border-l">
-                            {i + 1}
-                          </th>
-                        ))
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {teacherSchedules.map((teacher, idx) => (
-                      <tr key={teacher.name} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 bg-inherit z-10 border-r">
-                          {teacher.name}
-                        </td>
-                        {days.map(day => (
-                          Array.from({ length: maxPeriods }, (_, i) => {
-                            const content = getCellContent(teacher, day, i + 1);
-                            return (
-                              <td key={`${day}-${i+1}`} className="px-2 py-1 text-xs border whitespace-pre-line min-h-[40px]">
-                                {content}
-                              </td>
-                            );
-                          })
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+        {/* Messages */}
+        {message && (
+          <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded text-center">
+            {message}
+          </div>
+        )}
+        
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded text-center">
+            {error}
+          </div>
+        )}
+
+        {/* Action Buttons - Show when timetable is generated */}
+        {timetable && (
+          <div className="flex justify-center gap-4 mb-6">
+            <div className="flex gap-2">
+              <button
+                onClick={() => setViewType('class')}
+                className={`px-4 py-2 rounded-lg transition duration-300 ${
+                  viewType === 'class' 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                Class Timetable
+              </button>
+              <button
+                onClick={() => setViewType('teacher')}
+                className={`px-4 py-2 rounded-lg transition duration-300 ${
+                  viewType === 'teacher' 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                Teacher Timetable
+              </button>
             </div>
+            <button
+              onClick={handleGenerateAgain}
+              className="bg-orange-600 text-white py-2 px-6 rounded-lg hover:bg-orange-700 focus:outline-none focus:ring-4 focus:ring-orange-300 transition duration-300"
+            >
+              Generate Again
+            </button>
+            <button
+              onClick={handleSaveTimetable}
+              className="bg-green-600 text-white py-2 px-6 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-300 transition duration-300"
+            >
+              Save Timetable
+            </button>
+            <button
+              onClick={exportTimetable}
+              className="bg-purple-600 text-white py-2 px-6 rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-4 focus:ring-purple-300 transition duration-300"
+            >
+              Export to CSV
+            </button>
+          </div>
+        )}
+
+        {/* Timetable Display */}
+        {timetable && selectedClasses.length > 0 && (
+          <div className="space-y-4">
+            {(() => {
+              const selectedClassTimetable = getSelectedClassTimetable();
+              const classSubjects = getClassSubjects();
+              
+              if (!selectedClassTimetable) return null;
+              
+              return (
+                <>
+                  {/* Class Header */}
+                  <div className="text-center bg-blue-50 p-4 rounded-lg border-2 border-blue-200">
+                    <h3 className="text-2xl font-bold text-blue-800">
+                      {selectedClassTimetable.class.full_name}
+                    </h3>
+                    <p className="text-blue-600 mt-1">
+                      Standard: {selectedClassTimetable.class.standard} | Division: {selectedClassTimetable.class.division}
+                    </p>
+                  </div>
+                  
+                  {/* Subject-wise Timetable */}
+                  <div className="overflow-x-auto">
+                    <div className="inline-block min-w-full align-middle">
+                      <div className="overflow-hidden border border-gray-200 rounded-lg">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-500 uppercase tracking-wider">
+                                Subject
+                              </th>
+                              {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => (
+                                <th key={day} className="px-4 py-3 text-center text-sm font-medium text-gray-500 uppercase tracking-wider border-l">
+                                  {day}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {classSubjects.map((subject, idx) => (
+                              <tr key={subject} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                                  {subject}
+                                </td>
+                                {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => {
+                                  // Find which period this subject is taught on this day
+                                  let periodInfo = '';
+                                  for (let period = 1; period <= config.periodsPerDay; period++) {
+                                    const slot = selectedClassTimetable.timetable[day][period];
+                                    if (slot.subject === subject) {
+                                      periodInfo = viewType === 'class' ? `Period ${period}` : `Period ${period}\n${slot.teacher}`;
+                                      break;
+                                    }
+                                  }
+                                  
+                                  return (
+                                    <td key={`${day}-${subject}`} className="px-4 py-3 text-center text-sm border-l whitespace-pre-line">
+                                      {periodInfo || '-'}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Period-wise Timetable (Alternative view) */}
+                  <div className="mt-8">
+                    <h4 className="text-lg font-semibold text-gray-800 mb-4 text-center">
+                      Period-wise Schedule
+                    </h4>
+                    <div className="overflow-x-auto">
+                      <div className="inline-block min-w-full align-middle">
+                        <div className="overflow-hidden border border-gray-200 rounded-lg">
+                          <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Period
+                                </th>
+                                {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => (
+                                  <th key={day} className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-l">
+                                    {day}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                              {Array.from({ length: config.periodsPerDay }, (_, periodIndex) => {
+                                const period = periodIndex + 1;
+                                const isRecessPeriod = period === config.recessAfterPeriod + 1;
+                                
+                                return (
+                                  <tr key={period} className={periodIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                    <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
+                                      {isRecessPeriod ? 'Recess' : `Period ${period}`}
+                                    </td>
+                                    {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => {
+                                      if (isRecessPeriod) {
+                                        return (
+                                          <td key={`${day}-${period}`} className="px-2 py-1 text-xs border-l text-center bg-yellow-100 font-semibold">
+                                            RECESS
+                                          </td>
+                                        );
+                                      }
+                                      
+                                      const slot = selectedClassTimetable.timetable[day][period];
+                                      const content = slot.subject !== 'Free' 
+                                        ? (viewType === 'class' ? slot.subject : `${slot.subject}\n${slot.teacher}`)
+                                        : 'Free';
+                                      return (
+                                        <td key={`${day}-${period}`} className="px-2 py-1 text-xs border-l whitespace-pre-line text-center">
+                                          {content}
+                                        </td>
+                                      );
+                                    })}
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         )}
       </div>

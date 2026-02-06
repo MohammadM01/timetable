@@ -16,14 +16,20 @@ const TeacherTimetable = ({ teacherId, teacherName }) => {
       setLoading(true);
       setError('');
       
+      console.log('Fetching timetable for teacher ID:', teacherId);
       const response = await fetch(`http://localhost:5000/api/timetable/teacher/${teacherId}`);
+      
       if (!response.ok) {
-        throw new Error('Failed to fetch teacher timetable');
+        const errorData = await response.json();
+        console.error('Teacher timetable fetch error:', errorData);
+        throw new Error(errorData.error || 'Failed to fetch teacher timetable');
       }
       
       const data = await response.json();
+      console.log('Teacher timetable data received:', data);
       setTimetable(data);
     } catch (err) {
+      console.error('Error fetching teacher timetable:', err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -54,7 +60,7 @@ const TeacherTimetable = ({ teacherId, teacherName }) => {
     );
   }
 
-  const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+  const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const periods = Array.from({ length: timetable.config.periodsPerDay }, (_, i) => i + 1);
 
   return (

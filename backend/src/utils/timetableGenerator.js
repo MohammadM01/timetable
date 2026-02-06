@@ -7,10 +7,11 @@ import Timetable from '../models/Timetable.js';
 class TimetableGenerator {
 	constructor(config = {}) {
 		this.config = {
-			daysPerWeek: config.daysPerWeek || 5,
+			daysPerWeek: config.daysPerWeek || 6, // Include Saturday
 			periodsPerDay: config.periodsPerDay || 8,
 			periodDuration: config.periodDuration || 45,
 			startTime: config.startTime || '08:00',
+			recessAfterPeriod: config.recessAfterPeriod || 4, // Add recess after 4th period
 			...config
 		};
 		
@@ -26,6 +27,10 @@ class TimetableGenerator {
 		try {
 			this.log.push('Starting timetable generation...');
 			
+			// Add randomization seed to ensure different timetables
+			this.randomSeed = Date.now() + Math.random() * 1000;
+			this.log.push(`Using randomization seed: ${this.randomSeed}`);
+			
 					// Fetch all data
 		const [teachers, subjects, classes, teacherSubjects] = await Promise.all([
 			Teacher.find({}).lean(),
@@ -37,11 +42,14 @@ class TimetableGenerator {
 		// Use target classes if specified, otherwise use all classes
 		const classesToProcess = this.targetClasses || classes;
 		
+		// Shuffle classes to process them in different order each time
+		const shuffledClasses = this.shuffleArray([...classesToProcess]);
+		
 		this.log.push(`Found ${teachers.length} teachers, ${subjects.length} subjects, ${classes.length} total classes`);
-		this.log.push(`Generating timetable for ${classesToProcess.length} selected classes`);
+		this.log.push(`Generating timetable for ${shuffledClasses.length} selected classes`);
 
 		// Initialize timetable structure
-		this.initializeTimetable(classesToProcess);
+		this.initializeTimetable(shuffledClasses);
 			
 			// Group subjects by standard
 			const subjectsByStandard = this.groupSubjectsByStandard(subjects);
@@ -50,12 +58,12 @@ class TimetableGenerator {
 			const teacherSubjectMap = this.createTeacherSubjectMap(teacherSubjects, teachers);
 			
 					// Generate timetable for each class
-		for (const classData of classesToProcess) {
+		for (const classData of shuffledClasses) {
 			await this.generateClassTimetable(classData, subjectsByStandard[classData.standard] || [], teacherSubjectMap);
 		}
 		
 		// Save to database
-		const timetableDoc = await this.saveTimetable(teachers, subjects, classesToProcess);
+		const timetableDoc = await this.saveTimetable(teachers, subjects, shuffledClasses);
 			
 			this.log.push('Timetable generation completed successfully');
 			return timetableDoc;
@@ -64,6 +72,28 @@ class TimetableGenerator {
 			this.log.push(`Error: ${error.message}`);
 			throw error;
 		}
+	}
+
+	shuffleArray(array) {
+		// Fisher-Yates shuffle algorithm with seeded random
+		const shuffled = [...array];
+		let currentIndex = shuffled.length;
+		
+		// Use seeded random for consistent but different results
+		const seededRandom = () => {
+			this.randomSeed = (this.randomSeed * 9301 + 49297) % 233280;
+			return this.randomSeed / 233280;
+		};
+		
+		while (currentIndex > 0) {
+			const randomIndex = Math.floor(seededRandom() * currentIndex);
+			currentIndex--;
+			
+			// Swap elements
+			[shuffled[currentIndex], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[currentIndex]];
+		}
+		
+		return shuffled;
 	}
 
 	initializeTimetable(classes) {
@@ -127,8 +157,11 @@ class TimetableGenerator {
 			this.log.push(`Warning: ${classData.full_name} needs ${totalPeriodsNeeded} periods but only ${availablePeriods} available`);
 		}
 		
+		// Shuffle subjects to add randomization
+		const shuffledSubjects = this.shuffleArray([...subjects]);
+		
 		// Create period allocation plan
-		const periodPlan = this.createPeriodPlan(subjects);
+		const periodPlan = this.createPeriodPlan(shuffledSubjects);
 		
 		// Allocate periods
 		for (const allocation of periodPlan) {
@@ -150,18 +183,33 @@ class TimetableGenerator {
 			const periods = subject.weekly_periods;
 			if (periods <= 0) continue;
 			
-			// Distribute periods across days
+			// Improved distribution to minimize free periods
 			const periodsPerDay = Math.floor(periods / this.config.daysPerWeek);
 			const remainingPeriods = periods % this.config.daysPerWeek;
 			
 			const distribution = [];
+			
+			// First, distribute base periods to all days
 			for (let day = 1; day <= this.config.daysPerWeek; day++) {
-				let dayPeriods = periodsPerDay;
-				if (day <= remainingPeriods) {
-					dayPeriods++;
+				if (periodsPerDay > 0) {
+					distribution.push({ day, periods: periodsPerDay });
 				}
-				if (dayPeriods > 0) {
-					distribution.push({ day, periods: dayPeriods });
+			}
+			
+			// Then distribute remaining periods, prioritizing days with fewer periods
+			if (remainingPeriods > 0) {
+				// Sort days by current period count (ascending) to fill gaps first
+				const dayCounts = distribution.map(d => ({ day: d.day, count: d.periods }));
+				dayCounts.sort((a, b) => a.count - b.count);
+				
+				for (let i = 0; i < remainingPeriods; i++) {
+					const dayToUpdate = dayCounts[i % dayCounts.length].day;
+					const existingDay = distribution.find(d => d.day === dayToUpdate);
+					if (existingDay) {
+						existingDay.periods++;
+					} else {
+						distribution.push({ day: dayToUpdate, periods: 1 });
+					}
 				}
 			}
 			
@@ -186,20 +234,22 @@ class TimetableGenerator {
 			return false;
 		}
 		
+		let totalAllocated = 0;
+		
 		// Try to allocate periods for each day
 		for (const dayAllocation of distribution) {
 			const { day, periods } = dayAllocation;
 			
-			// Find available periods for this day
-			const availablePeriods = this.findAvailablePeriods(classData._id, day, periods);
+			// Find available periods for this day with better strategy
+			const availablePeriods = this.findAvailablePeriodsOptimized(classData._id, day, periods);
 			
 			if (availablePeriods.length < periods) {
-				this.log.push(`Not enough periods available for ${subject.subject_name} on day ${day}`);
+				this.log.push(`Not enough periods available for ${subject.subject_name} on day ${day} (needed: ${periods}, found: ${availablePeriods.length})`);
 				continue;
 			}
 			
-			// Find best teacher for these periods
-			const teacher = this.findBestTeacher(availableTeachers, availablePeriods, day);
+			// Find best teacher for these periods with overlap prevention
+			const teacher = this.findBestTeacherWithOverlapCheck(availableTeachers, availablePeriods, day);
 			
 			if (!teacher) {
 				this.log.push(`No suitable teacher found for ${subject.subject_name} on day ${day}`);
@@ -226,10 +276,18 @@ class TimetableGenerator {
 					className: classData.full_name,
 					subject: subject.subject_name
 				};
+				
+				totalAllocated++;
 			}
 		}
 		
-		return true;
+		// If we couldn't allocate all periods, try to fill remaining gaps
+		if (totalAllocated < allocation.totalPeriods) {
+			this.log.push(`Only allocated ${totalAllocated}/${allocation.totalPeriods} periods for ${subject.subject_name}`);
+			await this.fillRemainingPeriods(classData, subject, allocation.totalPeriods - totalAllocated, teacherSubjectMap);
+		}
+		
+		return totalAllocated > 0;
 	}
 
 	findAvailablePeriods(classId, day, count) {
@@ -243,6 +301,45 @@ class TimetableGenerator {
 			}
 		}
 		return available;
+	}
+
+	findAvailablePeriodsOptimized(classId, day, count) {
+		const available = [];
+		for (let period = 1; period <= this.config.periodsPerDay; period++) {
+			if (this.timetable[classId][day][period] === null) {
+				available.push(period);
+			}
+		}
+		
+		// If we have enough periods, try to fill gaps first
+		if (available.length >= count) {
+			// Prioritize filling gaps in the middle of the day
+			const sortedAvailable = available.sort((a, b) => {
+				// Prefer periods that are surrounded by occupied periods
+				const aHasNeighbors = this.hasOccupiedNeighbors(classId, day, a);
+				const bHasNeighbors = this.hasOccupiedNeighbors(classId, day, b);
+				
+				if (aHasNeighbors && !bHasNeighbors) return -1;
+				if (!aHasNeighbors && bHasNeighbors) return 1;
+				
+				// If both or neither have neighbors, prefer earlier periods
+				return a - b;
+			});
+			
+			return sortedAvailable.slice(0, count);
+		}
+		
+		return available;
+	}
+
+	hasOccupiedNeighbors(classId, day, period) {
+		const prevPeriod = period - 1;
+		const nextPeriod = period + 1;
+		
+		const prevOccupied = prevPeriod >= 1 && this.timetable[classId][day][prevPeriod] !== null;
+		const nextOccupied = nextPeriod <= this.config.periodsPerDay && this.timetable[classId][day][nextPeriod] !== null;
+		
+		return prevOccupied || nextOccupied;
 	}
 
 	findBestTeacher(teachers, periods, day) {
@@ -264,6 +361,90 @@ class TimetableGenerator {
 			}
 		}
 		return null;
+	}
+
+	findBestTeacherWithOverlapCheck(teachers, periods, day) {
+		// Enhanced teacher selection with better overlap prevention
+		const availableTeachers = [];
+		
+		for (const teacher of teachers) {
+			let conflicts = 0;
+			let availablePeriods = 0;
+			
+			for (const period of periods) {
+				if (this.teacherSchedule[teacher.teacherId] && 
+					this.teacherSchedule[teacher.teacherId][day] && 
+					this.teacherSchedule[teacher.teacherId][day][period]) {
+					conflicts++;
+				} else {
+					availablePeriods++;
+				}
+			}
+			
+			if (availablePeriods === periods.length) {
+				// Teacher is completely available
+				return teacher;
+			} else if (availablePeriods > 0) {
+				// Teacher has some availability
+				availableTeachers.push({
+					teacher,
+					conflicts,
+					availablePeriods,
+					score: availablePeriods - conflicts * 2 // Penalize conflicts heavily
+				});
+			}
+		}
+		
+		// Sort by score (highest first) and return the best teacher
+		if (availableTeachers.length > 0) {
+			availableTeachers.sort((a, b) => b.score - a.score);
+			return availableTeachers[0].teacher;
+		}
+		
+		return null;
+	}
+
+	async fillRemainingPeriods(classData, subject, remainingPeriods, teacherSubjectMap) {
+		const key = `${classData.standard}-${subject.subject_name}`;
+		const availableTeachers = teacherSubjectMap[key] || [];
+		
+		if (availableTeachers.length === 0) return;
+		
+		// Try to fill remaining periods across all days
+		for (let day = 1; day <= this.config.daysPerWeek; day++) {
+			if (remainingPeriods <= 0) break;
+			
+			const availablePeriods = this.findAvailablePeriodsOptimized(classData._id, day, remainingPeriods);
+			if (availablePeriods.length === 0) continue;
+			
+			const teacher = this.findBestTeacherWithOverlapCheck(availableTeachers, availablePeriods, day);
+			if (!teacher) continue;
+			
+			// Allocate available periods
+			for (const period of availablePeriods) {
+				this.timetable[classData._id][day][period] = {
+					subject: subject.subject_name,
+					teacher: teacher.teacherName,
+					teacherId: teacher.teacherId
+				};
+				
+				// Update teacher schedule
+				if (!this.teacherSchedule[teacher.teacherId]) {
+					this.teacherSchedule[teacher.teacherId] = {};
+				}
+				if (!this.teacherSchedule[teacher.teacherId][day]) {
+					this.teacherSchedule[teacher.teacherId][day] = {};
+				}
+				this.teacherSchedule[teacher.teacherId][day][period] = {
+					classId: classData._id,
+					className: classData.full_name,
+					subject: subject.subject_name
+				};
+				
+				remainingPeriods--;
+				if (remainingPeriods <= 0) break;
+			}
+		}
 	}
 
 	async saveTimetable(teachers, subjects, classes) {
@@ -300,3 +481,4 @@ class TimetableGenerator {
 }
 
 export default TimetableGenerator;
+

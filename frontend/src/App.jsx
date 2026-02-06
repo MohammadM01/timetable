@@ -7,6 +7,7 @@ import ClassSetup from './pages/ClassSetup';
 import SubjectSetup from './pages/SubjectSetup';
 import PeriodSetup from './pages/PeriodSetup';
 import GenerateTimetable from './pages/GenerateTimetable';
+import ClassTimetable from './pages/ClassTimetable';
 import SubjectAssignment from './pages/SubjectAssignment';
 import TeacherTimetables from './pages/TeacherTimetables';
 import Navbar from './components/Navbar';
@@ -39,6 +40,7 @@ const App = () => {
                         <Route path="period-setup" element={<PeriodSetup />} />
                         <Route path="subject-assignment" element={<SubjectAssignment />} />
                         <Route path="generate-timetable" element={<GenerateTimetable />} />
+                        <Route path="class-timetable" element={<ClassTimetable />} />
                         <Route path="teacher-timetables" element={<TeacherTimetables />} />
                       </Routes>
                     </div>

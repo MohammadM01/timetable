@@ -98,7 +98,7 @@ router.get('/class/:id', async (req, res) => {
 		};
 
 		// Convert to day-wise format
-		const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+		const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 		for (let day = 1; day <= timetable.schoolConfig.daysPerWeek; day++) {
 			const dayName = dayNames[day - 1] || `Day ${day}`;
 			formattedTimetable.schedule[dayName] = {};
@@ -157,7 +157,7 @@ router.get('/teacher/:id', async (req, res) => {
 		};
 
 		// Convert to day-wise format
-		const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+		const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 		for (let day = 1; day <= timetable.schoolConfig.daysPerWeek; day++) {
 			const dayName = dayNames[day - 1] || `Day ${day}`;
 			formattedSchedule.schedule[dayName] = {};
@@ -201,7 +201,7 @@ router.get('/school', async (req, res) => {
 		};
 
 		// Create period-wise overview
-		const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+		const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 		for (let day = 1; day <= timetable.schoolConfig.daysPerWeek; day++) {
 			const dayName = dayNames[day - 1] || `Day ${day}`;
 			schoolTimetable.overview[dayName] = {};
@@ -331,22 +331,31 @@ router.get('/teachers/:standard/:subjectName', async (req, res) => {
 router.get('/teacher/:id', async (req, res) => {
 	try {
 		const { id } = req.params;
+		console.log('Fetching teacher timetable for ID:', id);
+		
 		const timetable = await Timetable.findOne({ generationStatus: 'completed' }).sort({ generatedAt: -1 });
 		
 		if (!timetable) {
+			console.log('No completed timetable found');
 			return res.status(404).json({ error: 'No timetable found. Please generate a timetable first.' });
 		}
 
+		console.log('Found timetable, checking teacher schedule for ID:', id);
 		const teacherSchedule = timetable.teacherSchedule[id];
 		if (!teacherSchedule) {
+			console.log('Teacher schedule not found for ID:', id);
+			console.log('Available teacher schedules:', Object.keys(timetable.teacherSchedule));
 			return res.status(404).json({ error: 'Teacher not found in timetable' });
 		}
 
 		// Get teacher details
 		const teacher = await Teacher.findOne({ id: Number(id) });
 		if (!teacher) {
+			console.log('Teacher not found in database for ID:', id);
 			return res.status(404).json({ error: 'Teacher not found' });
 		}
+
+		console.log('Found teacher:', teacher.name);
 
 		// Format the response
 		const formattedTimetable = {
@@ -361,7 +370,7 @@ router.get('/teacher/:id', async (req, res) => {
 		};
 
 		// Convert schedule to array format for easier frontend consumption
-		const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+		const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 		for (let dayIndex = 0; dayIndex < days.length; dayIndex++) {
 			const day = days[dayIndex];
 			formattedTimetable.schedule[day] = [];
@@ -378,6 +387,7 @@ router.get('/teacher/:id', async (req, res) => {
 			}
 		}
 
+		console.log('Formatted timetable for teacher:', formattedTimetable.teacher.name);
 		return res.json(formattedTimetable);
 		
 	} catch (error) {

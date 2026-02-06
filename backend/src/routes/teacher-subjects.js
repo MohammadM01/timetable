@@ -2,8 +2,14 @@ import { Router } from 'express';
 import TeacherSubject from '../models/TeacherSubject.js';
 import Teacher from '../models/Teacher.js';
 import Subject from '../models/Subject.js';
+import multer from 'multer';
+import XLSX from 'xlsx';
+import fs from 'fs';
 
 const router = Router();
+
+// Configure multer for file uploads
+const upload = multer({ dest: 'uploads/' });
 
 // Get all teacher-subject mappings
 router.get('/', async (req, res) => {
@@ -268,6 +274,155 @@ router.post('/bulk', async (req, res) => {
 	} catch (error) {
 		console.error('Error creating bulk teacher-subject mappings:', error);
 		return res.status(500).json({ error: 'Failed to create bulk teacher-subject mappings' });
+	}
+});
+
+// Upload teacher-subject mappings from Excel
+router.post('/upload', upload.single('file'), async (req, res) => {
+	try {
+		console.log('Upload request received');
+		console.log('Request file:', req.file);
+		
+		if (!req.file) {
+			console.log('No file uploaded');
+			return res.status(400).json({ error: 'No file uploaded' });
+		}
+
+		console.log('File uploaded successfully:', req.file.filename);
+		console.log('File path:', req.file.path);
+
+		// Read Excel file
+		console.log('Reading Excel file...');
+		const workbook = XLSX.readFile(req.file.path);
+		const sheetName = workbook.SheetNames[0];
+		const worksheet = workbook.Sheets[sheetName];
+		const data = XLSX.utils.sheet_to_json(worksheet);
+		
+		console.log('Excel data read successfully, rows:', data.length);
+
+		if (data.length === 0) {
+			return res.status(400).json({ error: 'Excel file is empty' });
+		}
+
+        // Expected columns (any of these variants):
+        // - Teacher ID | teacherId | TeacherId OR Teacher Name | Name | Teacher
+        // - Subject ID | subjectId | SubjectId OR Subject Name | subject | Subject and Standard | Class | Grade
+        const results = [];
+        let addedCount = 0;
+
+        for (let index = 0; index < data.length; index++) {
+            const row = data[index];
+
+            // Preserve sheet order implicitly by iterating sequentially
+
+            // Extract teacher identifier
+            let teacherId = parseInt(row['Teacher ID'] || row['teacherId'] || row['TeacherId']);
+            const teacherName = (row['Teacher Name'] || row['Teacher'] || row['teacher_name'] || row['Name'] || row['Teachername'] || row['TEACHER'] || row['TEACHER NAME'] || '').toString().trim();
+
+            // Extract subject identifier
+            let subjectId = row['Subject ID'] || row['subjectId'] || row['SubjectId'];
+            const subjectName = (row['Subject Name'] || row['Subject'] || row['subject_name'] || row['SUBJECT'] || '').toString().trim();
+            const standard = (row['Standard'] || row['Class'] || row['Grade'] || row['standard'] || '').toString().trim();
+
+            // Resolve teacher by name if ID not present
+            let teacherDoc = null;
+            if (!teacherId && teacherName) {
+                teacherDoc = await Teacher.findOne({ name: new RegExp('^' + teacherName + '$', 'i') });
+                if (teacherDoc) {
+                    teacherId = teacherDoc.id;
+                }
+            }
+
+            // Resolve subject by name + standard if ID not present
+            let subjectDoc = null;
+            if (!subjectId && subjectName && standard) {
+                subjectDoc = await Subject.findOne({
+                    subject_name: new RegExp('^' + subjectName + '$', 'i'),
+                    standard: new RegExp('^' + standard + '$', 'i')
+                });
+                if (subjectDoc) {
+                    subjectId = subjectDoc._id;
+                }
+            }
+
+            if (!teacherId || !subjectId) {
+                results.push({ row: index + 1, error: `Missing teacher/subject reference`, teacherName, subjectName, standard });
+                continue;
+            }
+
+            try {
+                // Ensure teacher exists
+                let teacher;
+                if (teacherDoc) {
+                    teacher = teacherDoc;
+                } else if (typeof teacherId === 'number' || !isNaN(teacherId)) {
+                    teacher = await Teacher.findOne({ id: parseInt(teacherId) });
+                } else {
+                    teacher = await Teacher.findOne({ id: teacherId });
+                }
+                if (!teacher) {
+                    results.push({ row: index + 1, error: `Teacher not found`, teacherId, teacherName });
+                    continue;
+                }
+
+                // Ensure subject exists
+                const subject = subjectDoc || (await Subject.findById(subjectId));
+                if (!subject) {
+                    results.push({ row: index + 1, error: `Subject not found`, subjectId, subjectName, standard });
+                    continue;
+                }
+
+                // Skip duplicates
+                const existingMapping = await TeacherSubject.findOne({ teacherId, subjectId: subject._id });
+                if (existingMapping) {
+                    results.push({ row: index + 1, error: `Mapping already exists for teacher ${teacherId} and subject ${subject._id.toString()}` });
+                    continue;
+                }
+
+                // Create mapping
+                const mapping = await TeacherSubject.create({
+                    teacherId,
+                    teacherName: teacher.name,
+                    subjectId: subject._id,
+                    subjectName: subject.subject_name,
+                    standard: subject.standard,
+                    preferredPeriods: [],
+                    avoidPeriods: [],
+                    consecutivePeriods: false
+                });
+
+                results.push({
+                    success: true,
+                    id: mapping._id,
+                    teacherId: mapping.teacherId,
+                    teacherName: mapping.teacherName,
+                    subjectName: mapping.subjectName,
+                    standard: mapping.standard
+                });
+                addedCount++;
+            } catch (error) {
+                results.push({ row: index + 1, error: `Failed to create mapping: ${error.message}` });
+            }
+        }
+
+		// Clean up uploaded file
+		fs.unlinkSync(req.file.path);
+
+		return res.json({
+			success: true,
+			message: `Successfully processed ${data.length} rows`,
+			addedCount,
+			results
+		});
+
+	} catch (error) {
+		console.error('Error uploading teacher-subject mappings:', error);
+		console.error('Error details:', error.message);
+		console.error('Error stack:', error.stack);
+		return res.status(500).json({ 
+			error: 'Failed to upload teacher-subject mappings',
+			details: error.message 
+		});
 	}
 });
 
