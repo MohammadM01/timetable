@@ -10,6 +10,8 @@ const GenerateTimetable = () => {
   const [message, setMessage] = useState('');
   const [timetable, setTimetable] = useState(null);
   const [viewType, setViewType] = useState('class'); // 'class' or 'teacher'
+  const [warnings, setWarnings] = useState([]); // Warnings from generation
+  const [customPreferences, setCustomPreferences] = useState('');
   const [config, setConfig] = useState({
     daysPerWeek: 6, // Include Saturday
     periodsPerDay: 8,
@@ -36,13 +38,14 @@ const GenerateTimetable = () => {
     setLoading(true);
     setError('');
     setMessage('');
+    setWarnings([]);
 
     try {
       // Check if we have teacher-subject assignments
       console.log('Checking teacher-subject assignments...');
       const teacherSubjects = await getTeacherSubjects();
       console.log('Teacher-subject assignments:', teacherSubjects);
-      
+
       if (!teacherSubjects || teacherSubjects.length === 0) {
         setError('No teacher-subject assignments found. Please assign subjects to teachers first in the Subject Assignment page.');
         setLoading(false);
@@ -60,7 +63,8 @@ const GenerateTimetable = () => {
         config,
         selectedClasses: selectedClasses.map(id => id.toString()),
         generationType: generationType === 'selected' ? 'selected' : 'all',
-        viewType: 'student'
+        viewType: 'student',
+        customPreferences
       };
 
       console.log('Generating timetable with payload:', payload);
@@ -70,10 +74,14 @@ const GenerateTimetable = () => {
       const data = await generateTimetableWithConfig(payload);
       console.log('Generation response:', data);
       setMessage(`✅ ${data.message}`);
-      
+
+      if (data.warnings && data.warnings.length > 0) {
+        setWarnings(data.warnings);
+      }
+
       // Load the generated timetable
       await loadTimetable();
-      
+
     } catch (err) {
       console.error('Failed to generate timetable:', err);
       setError(err.message || 'Failed to generate timetable');
@@ -88,7 +96,7 @@ const GenerateTimetable = () => {
       console.log('Loaded timetable data:', data);
       console.log('Timetable overview structure:', data.overview);
       console.log('Timetable direct structure:', data.timetable);
-      
+
       if (data.overview) {
         console.log('Sample overview data:', Object.keys(data.overview));
         if (Object.keys(data.overview).length > 0) {
@@ -96,19 +104,19 @@ const GenerateTimetable = () => {
           console.log(`Sample data for ${firstDay}:`, data.overview[firstDay]);
         }
       }
-      
+
       // If overview doesn't exist, try to use the direct timetable data
       if (!data.overview && data.timetable) {
         console.log('Using direct timetable data instead of overview');
         // Convert timetable format to overview format
         const overview = {};
         const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        
+
         days.forEach((day, dayIndex) => {
           overview[day] = {};
           for (let period = 1; period <= config.periodsPerDay; period++) {
             overview[day][`Period ${period}`] = {};
-            
+
             // Get all classes and their data for this period
             Object.keys(data.timetable).forEach(classId => {
               const classData = classes.find(c => c.id === classId);
@@ -123,11 +131,11 @@ const GenerateTimetable = () => {
             });
           }
         });
-        
+
         data.overview = overview;
         console.log('Converted timetable to overview format:', overview);
       }
-      
+
       setTimetable(data);
     } catch (err) {
       console.error('Failed to load timetable:', err);
@@ -139,6 +147,7 @@ const GenerateTimetable = () => {
     setTimetable(null);
     setMessage('');
     setError('');
+    setWarnings([]);
     // Generate a new timetable without page reload
     await handleGenerate();
   };
@@ -151,15 +160,15 @@ const GenerateTimetable = () => {
 
   const exportTimetable = () => {
     if (!timetable || !selectedClasses.length) return;
-    
+
     const selectedClassTimetable = getSelectedClassTimetable();
     if (!selectedClassTimetable) return;
-    
+
     // Create CSV content for selected class only
     let csvContent = `Timetable for ${selectedClassTimetable.class.full_name}\n`;
     csvContent += `Standard: ${selectedClassTimetable.class.standard} | Division: ${selectedClassTimetable.class.division}\n\n`;
     csvContent += 'Day,Period,Subject,Teacher\n';
-    
+
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
     days.forEach(day => {
       for (let period = 1; period <= config.periodsPerDay; period++) {
@@ -167,7 +176,7 @@ const GenerateTimetable = () => {
         csvContent += `${day},${period},${slot?.subject || 'Free'},${slot?.teacher || 'Free'}\n`;
       }
     });
-    
+
     // Download CSV
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
@@ -206,16 +215,16 @@ const GenerateTimetable = () => {
   // Function to get selected class timetable data
   const getSelectedClassTimetable = () => {
     if (!timetable || !selectedClasses.length) return null;
-    
+
     const selectedClassData = classes.find(cls => selectedClasses.includes(cls.id));
     if (!selectedClassData) return null;
-    
+
     console.log('Selected class data:', selectedClassData);
     console.log('Timetable overview:', timetable.overview);
-    
+
     const classTimetable = {};
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    
+
     // Extract timetable data for the selected class
     days.forEach(day => {
       classTimetable[day] = {};
@@ -226,7 +235,7 @@ const GenerateTimetable = () => {
         classTimetable[day][period] = slot || { subject: 'Free', teacher: 'Free' };
       }
     });
-    
+
     console.log('Processed class timetable:', classTimetable);
     return {
       class: selectedClassData,
@@ -238,10 +247,10 @@ const GenerateTimetable = () => {
   const getClassSubjects = () => {
     const classTimetable = getSelectedClassTimetable();
     if (!classTimetable) return [];
-    
+
     const subjects = new Set();
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    
+
     days.forEach(day => {
       for (let period = 1; period <= config.periodsPerDay; period++) {
         const slot = classTimetable.timetable[day][period];
@@ -250,7 +259,7 @@ const GenerateTimetable = () => {
         }
       }
     });
-    
+
     return Array.from(subjects).sort();
   };
 
@@ -266,15 +275,14 @@ const GenerateTimetable = () => {
     <div className="p-6">
       <h2 className="text-3xl font-bold text-purple-600 mb-6">Generate Timetable</h2>
       <div className="bg-white p-6 rounded-lg shadow-lg space-y-6">
-        
+
         {/* Generation Type Selection */}
         <div className="space-y-4">
           <h3 className="text-lg font-semibold text-gray-800">Generation Type</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div 
-              className={`p-4 border-2 rounded-lg cursor-pointer transition-colors ${
-                generationType === 'all' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
-              }`}
+            <div
+              className={`p-4 border-2 rounded-lg cursor-pointer transition-colors ${generationType === 'all' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                }`}
               onClick={() => setGenerationType('all')}
             >
               <div className="text-center">
@@ -283,11 +291,10 @@ const GenerateTimetable = () => {
                 <p className="text-sm text-gray-600">Generate for all classes</p>
               </div>
             </div>
-            
-            <div 
-              className={`p-4 border-2 rounded-lg cursor-pointer transition-colors ${
-                generationType === 'selected' ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:border-gray-300'
-              }`}
+
+            <div
+              className={`p-4 border-2 rounded-lg cursor-pointer transition-colors ${generationType === 'selected' ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:border-gray-300'
+                }`}
               onClick={() => setGenerationType('selected')}
             >
               <div className="text-center">
@@ -296,11 +303,10 @@ const GenerateTimetable = () => {
                 <p className="text-sm text-gray-600">Choose specific classes</p>
               </div>
             </div>
-            
-            <div 
-              className={`p-4 border-2 rounded-lg cursor-pointer transition-colors ${
-                generationType === 'standard' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-gray-300'
-              }`}
+
+            <div
+              className={`p-4 border-2 rounded-lg cursor-pointer transition-colors ${generationType === 'standard' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-gray-300'
+                }`}
               onClick={() => setGenerationType('standard')}
             >
               <div className="text-center">
@@ -317,14 +323,14 @@ const GenerateTimetable = () => {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-800">Select Classes</h3>
-              <button 
+              <button
                 onClick={handleSelectAll}
                 className="bg-gray-200 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-300 transition duration-300"
               >
                 {selectedClasses.length === classes.length ? 'Deselect All' : 'Select All'}
               </button>
             </div>
-            
+
             <div className="max-h-60 overflow-y-auto border rounded-lg p-4 bg-gray-50">
               {Object.entries(groupedClasses).map(([standard, standardClasses]) => (
                 <div key={standard} className="mb-4">
@@ -348,7 +354,7 @@ const GenerateTimetable = () => {
                 </div>
               ))}
             </div>
-            
+
             {selectedClasses.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
@@ -373,7 +379,7 @@ const GenerateTimetable = () => {
                 min="1"
                 max="7"
                 value={config.daysPerWeek}
-                onChange={(e) => setConfig({...config, daysPerWeek: parseInt(e.target.value)})}
+                onChange={(e) => setConfig({ ...config, daysPerWeek: parseInt(e.target.value) })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -387,7 +393,7 @@ const GenerateTimetable = () => {
                 min="1"
                 max="8"
                 value={config.recessAfterPeriod}
-                onChange={(e) => setConfig({...config, recessAfterPeriod: parseInt(e.target.value)})}
+                onChange={(e) => setConfig({ ...config, recessAfterPeriod: parseInt(e.target.value) })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -401,7 +407,7 @@ const GenerateTimetable = () => {
                 min="1"
                 max="12"
                 value={config.periodsPerDay}
-                onChange={(e) => setConfig({...config, periodsPerDay: parseInt(e.target.value)})}
+                onChange={(e) => setConfig({ ...config, periodsPerDay: parseInt(e.target.value) })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -415,7 +421,7 @@ const GenerateTimetable = () => {
                 min="30"
                 max="90"
                 value={config.periodDuration}
-                onChange={(e) => setConfig({...config, periodDuration: parseInt(e.target.value)})}
+                onChange={(e) => setConfig({ ...config, periodDuration: parseInt(e.target.value) })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -427,11 +433,28 @@ const GenerateTimetable = () => {
                 id="startTime"
                 type="time"
                 value={config.startTime}
-                onChange={(e) => setConfig({...config, startTime: e.target.value})}
+                onChange={(e) => setConfig({ ...config, startTime: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>
+        </div>
+
+        {/* Custom Preferences */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-gray-800">Custom Preferences (Optional)</h3>
+          <p className="text-sm text-gray-600">
+            Tell the AI how you want the timetable. Examples:<br />
+            - "Add Algebra daily except Friday"<br />
+            - "On Thursday make Algebra 2 periods back to back"<br />
+            - "Ensure all periods are full"
+          </p>
+          <textarea
+            value={customPreferences}
+            onChange={(e) => setCustomPreferences(e.target.value)}
+            placeholder="Type your preferences here..."
+            className="w-full h-24 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+          />
         </div>
 
         {/* Messages */}
@@ -440,7 +463,7 @@ const GenerateTimetable = () => {
             {message}
           </div>
         )}
-        
+
         {error && (
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
             {error}
@@ -457,17 +480,37 @@ const GenerateTimetable = () => {
             {loading ? 'Generating...' : 'Generate Timetable'}
           </button>
         </div>
-        
+
         {/* Messages */}
         {message && (
           <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded text-center">
             {message}
           </div>
         )}
-        
+
         {error && (
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded text-center">
             {error}
+          </div>
+        )}
+
+        {/* Warnings */}
+        {warnings.length > 0 && (
+          <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded mt-4">
+            <div className="flex items-start">
+              <span className="text-xl mr-2">⚠️</span>
+              <div>
+                <h4 className="font-bold mb-1">Generation Warnings:</h4>
+                <ul className="list-disc list-inside space-y-1 text-sm">
+                  {warnings.slice(0, 5).map((w, idx) => (
+                    <li key={idx}>{w}</li>
+                  ))}
+                  {warnings.length > 5 && (
+                    <li className="italic text-gray-600">And {warnings.length - 5} more...</li>
+                  )}
+                </ul>
+              </div>
+            </div>
           </div>
         )}
 
@@ -477,21 +520,19 @@ const GenerateTimetable = () => {
             <div className="flex gap-2">
               <button
                 onClick={() => setViewType('class')}
-                className={`px-4 py-2 rounded-lg transition duration-300 ${
-                  viewType === 'class' 
-                    ? 'bg-blue-600 text-white' 
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
+                className={`px-4 py-2 rounded-lg transition duration-300 ${viewType === 'class'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
               >
                 Class Timetable
               </button>
               <button
                 onClick={() => setViewType('teacher')}
-                className={`px-4 py-2 rounded-lg transition duration-300 ${
-                  viewType === 'teacher' 
-                    ? 'bg-blue-600 text-white' 
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
+                className={`px-4 py-2 rounded-lg transition duration-300 ${viewType === 'teacher'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
               >
                 Teacher Timetable
               </button>
@@ -523,9 +564,9 @@ const GenerateTimetable = () => {
             {(() => {
               const selectedClassTimetable = getSelectedClassTimetable();
               const classSubjects = getClassSubjects();
-              
+
               if (!selectedClassTimetable) return null;
-              
+
               return (
                 <>
                   {/* Class Header */}
@@ -537,7 +578,7 @@ const GenerateTimetable = () => {
                       Standard: {selectedClassTimetable.class.standard} | Division: {selectedClassTimetable.class.division}
                     </p>
                   </div>
-                  
+
                   {/* Subject-wise Timetable */}
                   <div className="overflow-x-auto">
                     <div className="inline-block min-w-full align-middle">
@@ -571,7 +612,7 @@ const GenerateTimetable = () => {
                                       break;
                                     }
                                   }
-                                  
+
                                   return (
                                     <td key={`${day}-${subject}`} className="px-4 py-3 text-center text-sm border-l whitespace-pre-line">
                                       {periodInfo || '-'}
@@ -585,7 +626,7 @@ const GenerateTimetable = () => {
                       </div>
                     </div>
                   </div>
-                  
+
                   {/* Period-wise Timetable (Alternative view) */}
                   <div className="mt-8">
                     <h4 className="text-lg font-semibold text-gray-800 mb-4 text-center">
@@ -610,24 +651,16 @@ const GenerateTimetable = () => {
                             <tbody className="bg-white divide-y divide-gray-200">
                               {Array.from({ length: config.periodsPerDay }, (_, periodIndex) => {
                                 const period = periodIndex + 1;
-                                const isRecessPeriod = period === config.recessAfterPeriod + 1;
-                                
-                                return (
+                                const showRecess = period === config.recessAfterPeriod;
+
+                                const rows = [
                                   <tr key={period} className={periodIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                                     <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
-                                      {isRecessPeriod ? 'Recess' : `Period ${period}`}
+                                      {`Period ${period}`}
                                     </td>
                                     {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => {
-                                      if (isRecessPeriod) {
-                                        return (
-                                          <td key={`${day}-${period}`} className="px-2 py-1 text-xs border-l text-center bg-yellow-100 font-semibold">
-                                            RECESS
-                                          </td>
-                                        );
-                                      }
-                                      
                                       const slot = selectedClassTimetable.timetable[day][period];
-                                      const content = slot.subject !== 'Free' 
+                                      const content = slot && slot.subject !== 'Free'
                                         ? (viewType === 'class' ? slot.subject : `${slot.subject}\n${slot.teacher}`)
                                         : 'Free';
                                       return (
@@ -637,7 +670,24 @@ const GenerateTimetable = () => {
                                       );
                                     })}
                                   </tr>
-                                );
+                                ];
+
+                                if (showRecess) {
+                                  rows.push(
+                                    <tr key="recess" className="bg-yellow-50">
+                                      <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
+                                        Recess
+                                      </td>
+                                      {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => (
+                                        <td key={`${day}-recess`} className="px-2 py-1 text-xs border-l text-center bg-yellow-100 font-semibold text-yellow-800">
+                                          RECESS
+                                        </td>
+                                      ))}
+                                    </tr>
+                                  );
+                                }
+
+                                return rows;
                               })}
                             </tbody>
                           </table>

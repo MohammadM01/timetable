@@ -12,7 +12,7 @@ const router = Router();
 router.post('/generate', async (req, res) => {
 	try {
 		const { config = {}, selectedClasses = [], generationType = 'all' } = req.body;
-		
+
 		// Check if we have required data
 		const [teachers, subjects, classes, teacherSubjects] = await Promise.all([
 			Teacher.find({}).lean(),
@@ -46,20 +46,27 @@ router.post('/generate', async (req, res) => {
 		// Create and run generator
 		const generator = new TimetableGenerator({ ...config, targetClasses });
 		const timetable = await generator.generate();
-		
-		return res.json({ 
-			success: true, 
+
+		// Extract warnings from log
+		const warnings = timetable.generationLog.filter(log =>
+			log.toLowerCase().includes('warning') ||
+			log.toLowerCase().includes('not enough')
+		);
+
+		return res.json({
+			success: true,
 			message: `Timetable generated successfully for ${targetClasses.length} class(es)`,
+			warnings,
 			timetableId: timetable._id,
 			stats: timetable.stats,
 			generatedFor: targetClasses.map(c => ({ id: c._id, name: c.full_name }))
 		});
-		
+
 	} catch (error) {
 		console.error('Timetable generation error:', error);
-		return res.status(500).json({ 
-			error: 'Failed to generate timetable', 
-			details: error.message 
+		return res.status(500).json({
+			error: 'Failed to generate timetable',
+			details: error.message
 		});
 	}
 });
@@ -69,7 +76,7 @@ router.get('/class/:id', async (req, res) => {
 	try {
 		const { id } = req.params;
 		const timetable = await Timetable.findOne({ generationStatus: 'completed' }).sort({ generatedAt: -1 });
-		
+
 		if (!timetable) {
 			return res.status(404).json({ error: 'No timetable found. Please generate a timetable first.' });
 		}
@@ -102,7 +109,7 @@ router.get('/class/:id', async (req, res) => {
 		for (let day = 1; day <= timetable.schoolConfig.daysPerWeek; day++) {
 			const dayName = dayNames[day - 1] || `Day ${day}`;
 			formattedTimetable.schedule[dayName] = {};
-			
+
 			for (let period = 1; period <= timetable.schoolConfig.periodsPerDay; period++) {
 				const slot = classTimetable[day] && classTimetable[day][period];
 				formattedTimetable.schedule[dayName][`Period ${period}`] = slot || {
@@ -114,7 +121,7 @@ router.get('/class/:id', async (req, res) => {
 		}
 
 		return res.json(formattedTimetable);
-		
+
 	} catch (error) {
 		console.error('Error fetching class timetable:', error);
 		return res.status(500).json({ error: 'Failed to fetch class timetable' });
@@ -126,9 +133,9 @@ router.get('/teacher/:id', async (req, res) => {
 	try {
 		const { id } = req.params;
 		const teacherId = parseInt(id);
-		
+
 		const timetable = await Timetable.findOne({ generationStatus: 'completed' }).sort({ generatedAt: -1 });
-		
+
 		if (!timetable) {
 			return res.status(404).json({ error: 'No timetable found. Please generate a timetable first.' });
 		}
@@ -161,7 +168,7 @@ router.get('/teacher/:id', async (req, res) => {
 		for (let day = 1; day <= timetable.schoolConfig.daysPerWeek; day++) {
 			const dayName = dayNames[day - 1] || `Day ${day}`;
 			formattedSchedule.schedule[dayName] = {};
-			
+
 			for (let period = 1; period <= timetable.schoolConfig.periodsPerDay; period++) {
 				const slot = teacherSchedule[day] && teacherSchedule[day][period];
 				formattedSchedule.schedule[dayName][`Period ${period}`] = slot || {
@@ -173,7 +180,7 @@ router.get('/teacher/:id', async (req, res) => {
 		}
 
 		return res.json(formattedSchedule);
-		
+
 	} catch (error) {
 		console.error('Error fetching teacher timetable:', error);
 		return res.status(500).json({ error: 'Failed to fetch teacher timetable' });
@@ -184,14 +191,14 @@ router.get('/teacher/:id', async (req, res) => {
 router.get('/school', async (req, res) => {
 	try {
 		const timetable = await Timetable.findOne({ generationStatus: 'completed' }).sort({ generatedAt: -1 });
-		
+
 		if (!timetable) {
 			return res.status(404).json({ error: 'No timetable found. Please generate a timetable first.' });
 		}
 
 		// Get all classes
 		const classes = await Class.find({}).sort({ standard: 1, division: 1 });
-		
+
 		// Format the response
 		const schoolTimetable = {
 			config: timetable.schoolConfig,
@@ -205,15 +212,15 @@ router.get('/school', async (req, res) => {
 		for (let day = 1; day <= timetable.schoolConfig.daysPerWeek; day++) {
 			const dayName = dayNames[day - 1] || `Day ${day}`;
 			schoolTimetable.overview[dayName] = {};
-			
+
 			for (let period = 1; period <= timetable.schoolConfig.periodsPerDay; period++) {
 				schoolTimetable.overview[dayName][`Period ${period}`] = {};
-				
+
 				// Get all classes for this period
 				for (const classData of classes) {
 					const classTimetable = timetable.timetable[classData._id];
 					const slot = classTimetable && classTimetable[day] && classTimetable[day][period];
-					
+
 					schoolTimetable.overview[dayName][`Period ${period}`][classData.full_name] = slot || {
 						subject: 'Free',
 						teacher: 'Free',
@@ -224,7 +231,7 @@ router.get('/school', async (req, res) => {
 		}
 
 		return res.json(schoolTimetable);
-		
+
 	} catch (error) {
 		console.error('Error fetching school timetable:', error);
 		return res.status(500).json({ error: 'Failed to fetch school timetable' });
@@ -235,9 +242,9 @@ router.get('/school', async (req, res) => {
 router.get('/status', async (req, res) => {
 	try {
 		const timetable = await Timetable.findOne({}).sort({ generatedAt: -1 });
-		
+
 		if (!timetable) {
-			return res.json({ 
+			return res.json({
 				status: 'not_generated',
 				message: 'No timetable has been generated yet'
 			});
@@ -249,7 +256,7 @@ router.get('/status', async (req, res) => {
 			stats: timetable.stats,
 			log: timetable.generationLog
 		});
-		
+
 	} catch (error) {
 		console.error('Error fetching timetable status:', error);
 		return res.status(500).json({ error: 'Failed to fetch timetable status' });
@@ -307,11 +314,11 @@ router.get('/subjects/:standard', async (req, res) => {
 router.get('/teachers/:standard/:subjectName', async (req, res) => {
 	try {
 		const { standard, subjectName } = req.params;
-		const teacherSubjects = await TeacherSubject.find({ 
-			standard, 
-			subjectName: new RegExp(subjectName, 'i') 
+		const teacherSubjects = await TeacherSubject.find({
+			standard,
+			subjectName: new RegExp(subjectName, 'i')
 		}).lean();
-		
+
 		const formatted = teacherSubjects.map(ts => ({
 			teacherId: ts.teacherId,
 			teacherName: ts.teacherName,
@@ -319,7 +326,7 @@ router.get('/teachers/:standard/:subjectName', async (req, res) => {
 			avoidPeriods: ts.avoidPeriods || [],
 			consecutivePeriods: ts.consecutivePeriods || false
 		}));
-		
+
 		return res.json(formatted);
 	} catch (error) {
 		console.error('Error fetching teachers for subject:', error);
@@ -332,9 +339,9 @@ router.get('/teacher/:id', async (req, res) => {
 	try {
 		const { id } = req.params;
 		console.log('Fetching teacher timetable for ID:', id);
-		
+
 		const timetable = await Timetable.findOne({ generationStatus: 'completed' }).sort({ generatedAt: -1 });
-		
+
 		if (!timetable) {
 			console.log('No completed timetable found');
 			return res.status(404).json({ error: 'No timetable found. Please generate a timetable first.' });
@@ -374,7 +381,7 @@ router.get('/teacher/:id', async (req, res) => {
 		for (let dayIndex = 0; dayIndex < days.length; dayIndex++) {
 			const day = days[dayIndex];
 			formattedTimetable.schedule[day] = [];
-			
+
 			for (let period = 1; period <= timetable.schoolConfig.periodsPerDay; period++) {
 				const periodData = teacherSchedule[dayIndex + 1] && teacherSchedule[dayIndex + 1][period];
 				formattedTimetable.schedule[day].push({
@@ -389,7 +396,7 @@ router.get('/teacher/:id', async (req, res) => {
 
 		console.log('Formatted timetable for teacher:', formattedTimetable.teacher.name);
 		return res.json(formattedTimetable);
-		
+
 	} catch (error) {
 		console.error('Error fetching teacher timetable:', error);
 		return res.status(500).json({ error: 'Failed to fetch teacher timetable' });
@@ -400,16 +407,16 @@ router.get('/teacher/:id', async (req, res) => {
 router.get('/teachers', async (req, res) => {
 	try {
 		const timetable = await Timetable.findOne({ generationStatus: 'completed' }).sort({ generatedAt: -1 });
-		
+
 		if (!timetable) {
 			return res.status(404).json({ error: 'No timetable found. Please generate a timetable first.' });
 		}
 
 		// Get all teachers
 		const teachers = await Teacher.find({}).sort({ id: 1 }).lean();
-		
+
 		const teacherTimetables = {};
-		
+
 		for (const teacher of teachers) {
 			const teacherSchedule = timetable.teacherSchedule[teacher.id];
 			if (teacherSchedule) {
@@ -429,7 +436,7 @@ router.get('/teachers', async (req, res) => {
 			config: timetable.schoolConfig,
 			teacherTimetables
 		});
-		
+
 	} catch (error) {
 		console.error('Error fetching teacher timetables:', error);
 		return res.status(500).json({ error: 'Failed to fetch teacher timetables' });
