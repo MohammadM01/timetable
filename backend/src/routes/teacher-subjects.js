@@ -5,6 +5,9 @@ import Subject from '../models/Subject.js';
 import multer from 'multer';
 import XLSX from 'xlsx';
 import fs from 'fs';
+import mongoose from 'mongoose';
+import { escapeRegex } from '../utils/helpers.js';
+
 
 const router = Router();
 
@@ -18,7 +21,7 @@ router.get('/', async (req, res) => {
 			.populate('subjectId', 'subject_name standard weekly_periods')
 			.sort({ teacherName: 1, standard: 1, subjectName: 1 })
 			.lean();
-		
+
 		const formatted = mappings.map(m => ({
 			id: m._id,
 			teacherId: m.teacherId,
@@ -31,7 +34,7 @@ router.get('/', async (req, res) => {
 			avoidPeriods: m.avoidPeriods || [],
 			consecutivePeriods: m.consecutivePeriods || false
 		}));
-		
+
 		return res.json(formatted);
 	} catch (error) {
 		console.error('Error fetching teacher-subject mappings:', error);
@@ -47,7 +50,7 @@ router.get('/teacher/:teacherId', async (req, res) => {
 			.populate('subjectId', 'subject_name standard weekly_periods')
 			.sort({ standard: 1, subjectName: 1 })
 			.lean();
-		
+
 		const formatted = mappings.map(m => ({
 			id: m._id,
 			teacherId: m.teacherId,
@@ -60,7 +63,7 @@ router.get('/teacher/:teacherId', async (req, res) => {
 			avoidPeriods: m.avoidPeriods || [],
 			consecutivePeriods: m.consecutivePeriods || false
 		}));
-		
+
 		return res.json(formatted);
 	} catch (error) {
 		console.error('Error fetching teacher mappings:', error);
@@ -76,7 +79,7 @@ router.get('/subject/:subjectId', async (req, res) => {
 			.populate('subjectId', 'subject_name standard weekly_periods')
 			.sort({ teacherName: 1 })
 			.lean();
-		
+
 		const formatted = mappings.map(m => ({
 			id: m._id,
 			teacherId: m.teacherId,
@@ -89,7 +92,7 @@ router.get('/subject/:subjectId', async (req, res) => {
 			avoidPeriods: m.avoidPeriods || [],
 			consecutivePeriods: m.consecutivePeriods || false
 		}));
-		
+
 		return res.json(formatted);
 	} catch (error) {
 		console.error('Error fetching subject mappings:', error);
@@ -101,25 +104,32 @@ router.get('/subject/:subjectId', async (req, res) => {
 router.post('/', async (req, res) => {
 	try {
 		const { teacherId, subjectId, preferredPeriods, avoidPeriods, consecutivePeriods } = req.body;
-		
-		// Validate teacher exists - handle both numeric and string IDs
+
+		// Validate teacher exists - handle numeric ID, string ID, or name
 		let teacher;
-		if (typeof teacherId === 'number' || !isNaN(teacherId)) {
-			teacher = await Teacher.findOne({ id: parseInt(teacherId) });
-		} else {
-			teacher = await Teacher.findOne({ id: teacherId });
+		const parsedTeacherId = parseInt(teacherId);
+
+		if (!isNaN(parsedTeacherId)) {
+			teacher = await Teacher.findOne({ id: parsedTeacherId });
+		} else if (typeof teacherId === 'string' && teacherId.trim()) {
+			teacher = await Teacher.findOne({ name: new RegExp('^' + escapeRegex(teacherId) + '$', 'i') });
+		} else if (req.body.teacherName && typeof req.body.teacherName === 'string') {
+			teacher = await Teacher.findOne({ name: new RegExp('^' + escapeRegex(req.body.teacherName) + '$', 'i') });
 		}
-		
+
 		if (!teacher) {
-			return res.status(400).json({ error: `Teacher with ID ${teacherId} not found` });
+			return res.status(400).json({ error: `Teacher not found. ID: ${teacherId || 'N/A'}, Name: ${req.body.teacherName || 'N/A'}` });
 		}
-		
+
 		// Validate subject exists
-		const subject = await Subject.findById(subjectId);
+		let subject;
+		if (mongoose.Types.ObjectId.isValid(subjectId)) {
+			subject = await Subject.findById(subjectId);
+		}
 		if (!subject) {
 			return res.status(400).json({ error: 'Subject not found' });
 		}
-		
+
 		// Create mapping
 		const mapping = await TeacherSubject.create({
 			teacherId,
@@ -131,7 +141,7 @@ router.post('/', async (req, res) => {
 			avoidPeriods: avoidPeriods || [],
 			consecutivePeriods: consecutivePeriods || false
 		});
-		
+
 		return res.json({
 			id: mapping._id,
 			teacherId: mapping.teacherId,
@@ -143,7 +153,7 @@ router.post('/', async (req, res) => {
 			avoidPeriods: mapping.avoidPeriods,
 			consecutivePeriods: mapping.consecutivePeriods
 		});
-		
+
 	} catch (error) {
 		if (error.code === 11000) {
 			return res.status(400).json({ error: 'This teacher-subject combination already exists' });
@@ -158,7 +168,7 @@ router.put('/:id', async (req, res) => {
 	try {
 		const { id } = req.params;
 		const { preferredPeriods, avoidPeriods, consecutivePeriods } = req.body;
-		
+
 		const mapping = await TeacherSubject.findByIdAndUpdate(
 			id,
 			{
@@ -168,11 +178,11 @@ router.put('/:id', async (req, res) => {
 			},
 			{ new: true }
 		);
-		
+
 		if (!mapping) {
 			return res.status(404).json({ error: 'Mapping not found' });
 		}
-		
+
 		return res.json({
 			id: mapping._id,
 			teacherId: mapping.teacherId,
@@ -184,7 +194,7 @@ router.put('/:id', async (req, res) => {
 			avoidPeriods: mapping.avoidPeriods,
 			consecutivePeriods: mapping.consecutivePeriods
 		});
-		
+
 	} catch (error) {
 		console.error('Error updating teacher-subject mapping:', error);
 		return res.status(500).json({ error: 'Failed to update teacher-subject mapping' });
@@ -195,14 +205,14 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
 	try {
 		const { id } = req.params;
-		
+
 		const mapping = await TeacherSubject.findByIdAndDelete(id);
 		if (!mapping) {
 			return res.status(404).json({ error: 'Mapping not found' });
 		}
-		
+
 		return res.json({ success: true });
-		
+
 	} catch (error) {
 		console.error('Error deleting teacher-subject mapping:', error);
 		return res.status(500).json({ error: 'Failed to delete teacher-subject mapping' });
@@ -214,31 +224,32 @@ router.post('/bulk', async (req, res) => {
 	try {
 		const mappings = req.body || [];
 		const results = [];
-		
+
 		for (const mappingData of mappings) {
 			const { teacherId, subjectId, preferredPeriods, avoidPeriods, consecutivePeriods } = mappingData;
-			
+
 			try {
 				// Validate teacher exists - handle both numeric and string IDs
 				let teacher;
-				if (typeof teacherId === 'number' || !isNaN(teacherId)) {
-					teacher = await Teacher.findOne({ id: parseInt(teacherId) });
-				} else {
-					teacher = await Teacher.findOne({ id: teacherId });
+				const parsedTeacherId = parseInt(teacherId);
+				if (!isNaN(parsedTeacherId)) {
+					teacher = await Teacher.findOne({ id: parsedTeacherId });
+				} else if (typeof teacherId === 'string' && teacherId.trim()) {
+					teacher = await Teacher.findOne({ name: new RegExp('^' + escapeRegex(teacherId) + '$', 'i') });
 				}
-				
+
 				if (!teacher) {
-					results.push({ error: `Teacher with ID ${teacherId} not found` });
+					results.push({ error: `Teacher with ID ${teacherId || 'N/A'} not found` });
 					continue;
 				}
-				
+
 				// Validate subject exists
 				const subject = await Subject.findById(subjectId);
 				if (!subject) {
 					results.push({ error: `Subject with ID ${subjectId} not found` });
 					continue;
 				}
-				
+
 				// Create mapping
 				const mapping = await TeacherSubject.create({
 					teacherId,
@@ -250,7 +261,7 @@ router.post('/bulk', async (req, res) => {
 					avoidPeriods: avoidPeriods || [],
 					consecutivePeriods: consecutivePeriods || false
 				});
-				
+
 				results.push({
 					success: true,
 					id: mapping._id,
@@ -259,7 +270,7 @@ router.post('/bulk', async (req, res) => {
 					subjectName: mapping.subjectName,
 					standard: mapping.standard
 				});
-				
+
 			} catch (error) {
 				if (error.code === 11000) {
 					results.push({ error: `Teacher-subject combination already exists for teacher ${teacherId} and subject ${subjectId}` });
@@ -268,9 +279,9 @@ router.post('/bulk', async (req, res) => {
 				}
 			}
 		}
-		
+
 		return res.json({ results });
-		
+
 	} catch (error) {
 		console.error('Error creating bulk teacher-subject mappings:', error);
 		return res.status(500).json({ error: 'Failed to create bulk teacher-subject mappings' });
@@ -282,7 +293,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 	try {
 		console.log('Upload request received');
 		console.log('Request file:', req.file);
-		
+
 		if (!req.file) {
 			console.log('No file uploaded');
 			return res.status(400).json({ error: 'No file uploaded' });
@@ -297,113 +308,118 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 		const sheetName = workbook.SheetNames[0];
 		const worksheet = workbook.Sheets[sheetName];
 		const data = XLSX.utils.sheet_to_json(worksheet);
-		
+
 		console.log('Excel data read successfully, rows:', data.length);
 
 		if (data.length === 0) {
 			return res.status(400).json({ error: 'Excel file is empty' });
 		}
 
-        // Expected columns (any of these variants):
-        // - Teacher ID | teacherId | TeacherId OR Teacher Name | Name | Teacher
-        // - Subject ID | subjectId | SubjectId OR Subject Name | subject | Subject and Standard | Class | Grade
-        const results = [];
-        let addedCount = 0;
+		// Expected columns (any of these variants):
+		// - Teacher ID | teacherId | TeacherId OR Teacher Name | Name | Teacher
+		// - Subject ID | subjectId | SubjectId OR Subject Name | subject | Subject and Standard | Class | Grade
+		const results = [];
+		let addedCount = 0;
 
-        for (let index = 0; index < data.length; index++) {
-            const row = data[index];
+		for (let index = 0; index < data.length; index++) {
+			const row = data[index];
 
-            // Preserve sheet order implicitly by iterating sequentially
+			// Preserve sheet order implicitly by iterating sequentially
 
-            // Extract teacher identifier
-            let teacherId = parseInt(row['Teacher ID'] || row['teacherId'] || row['TeacherId']);
-            const teacherName = (row['Teacher Name'] || row['Teacher'] || row['teacher_name'] || row['Name'] || row['Teachername'] || row['TEACHER'] || row['TEACHER NAME'] || '').toString().trim();
+			// Extract teacher identifier
+			let teacherId = parseInt(row['Teacher ID'] || row['teacherId'] || row['TeacherId']);
+			const teacherName = (row['Teacher Name'] || row['Teacher'] || row['teacher_name'] || row['Name'] || row['Teachername'] || row['TEACHER'] || row['TEACHER NAME'] || '').toString().trim();
 
-            // Extract subject identifier
-            let subjectId = row['Subject ID'] || row['subjectId'] || row['SubjectId'];
-            const subjectName = (row['Subject Name'] || row['Subject'] || row['subject_name'] || row['SUBJECT'] || '').toString().trim();
-            const standard = (row['Standard'] || row['Class'] || row['Grade'] || row['standard'] || '').toString().trim();
+			// Extract subject identifier
+			let subjectId = row['Subject ID'] || row['subjectId'] || row['SubjectId'];
+			const subjectName = (row['Subject Name'] || row['Subject'] || row['subject_name'] || row['SUBJECT'] || '').toString().trim();
+			const standard = (row['Standard'] || row['Class'] || row['Grade'] || row['standard'] || '').toString().trim();
 
-            // Resolve teacher by name if ID not present
-            let teacherDoc = null;
-            if (!teacherId && teacherName) {
-                teacherDoc = await Teacher.findOne({ name: new RegExp('^' + teacherName + '$', 'i') });
-                if (teacherDoc) {
-                    teacherId = teacherDoc.id;
-                }
-            }
+			// Resolve teacher by name if ID not present
+			let teacherDoc = null;
+			if (!teacherId && teacherName) {
+				teacherDoc = await Teacher.findOne({ name: new RegExp('^' + escapeRegex(teacherName) + '$', 'i') });
+				if (teacherDoc) {
+					teacherId = teacherDoc.id;
+				}
+			}
 
-            // Resolve subject by name + standard if ID not present
-            let subjectDoc = null;
-            if (!subjectId && subjectName && standard) {
-                subjectDoc = await Subject.findOne({
-                    subject_name: new RegExp('^' + subjectName + '$', 'i'),
-                    standard: new RegExp('^' + standard + '$', 'i')
-                });
-                if (subjectDoc) {
-                    subjectId = subjectDoc._id;
-                }
-            }
+			// Resolve subject by name + standard if ID not present
+			let subjectDoc = null;
+			if (!subjectId && subjectName && standard) {
+				subjectDoc = await Subject.findOne({
+					subject_name: new RegExp('^' + escapeRegex(subjectName) + '$', 'i'),
+					standard: new RegExp('^' + escapeRegex(standard) + '$', 'i')
+				});
+				if (subjectDoc) {
+					subjectId = subjectDoc._id;
+				}
+			}
 
-            if (!teacherId || !subjectId) {
-                results.push({ row: index + 1, error: `Missing teacher/subject reference`, teacherName, subjectName, standard });
-                continue;
-            }
+			if (!teacherId || !subjectId) {
+				results.push({ row: index + 1, error: `Missing teacher/subject reference`, teacherName, subjectName, standard });
+				continue;
+			}
 
-            try {
-                // Ensure teacher exists
-                let teacher;
-                if (teacherDoc) {
-                    teacher = teacherDoc;
-                } else if (typeof teacherId === 'number' || !isNaN(teacherId)) {
-                    teacher = await Teacher.findOne({ id: parseInt(teacherId) });
-                } else {
-                    teacher = await Teacher.findOne({ id: teacherId });
-                }
-                if (!teacher) {
-                    results.push({ row: index + 1, error: `Teacher not found`, teacherId, teacherName });
-                    continue;
-                }
+			try {
+				// Ensure teacher exists
+				let teacher;
+				if (teacherDoc) {
+					teacher = teacherDoc;
+				} else {
+					const parsedUploadId = parseInt(teacherId);
+					if (!isNaN(parsedUploadId)) {
+						teacher = await Teacher.findOne({ id: parsedUploadId });
+					} else {
+						// Fallback if ID is string but not resolved earlier
+						teacher = await Teacher.findOne({ id: teacherId });
+					}
+				}
 
-                // Ensure subject exists
-                const subject = subjectDoc || (await Subject.findById(subjectId));
-                if (!subject) {
-                    results.push({ row: index + 1, error: `Subject not found`, subjectId, subjectName, standard });
-                    continue;
-                }
+				if (!teacher) {
+					results.push({ row: index + 1, error: `Teacher with ID ${teacherId} not found`, teacherId, teacherName });
+					continue;
+				}
 
-                // Skip duplicates
-                const existingMapping = await TeacherSubject.findOne({ teacherId, subjectId: subject._id });
-                if (existingMapping) {
-                    results.push({ row: index + 1, error: `Mapping already exists for teacher ${teacherId} and subject ${subject._id.toString()}` });
-                    continue;
-                }
+				// Ensure subject exists
+				const subject = subjectDoc || (await Subject.findById(subjectId));
+				if (!subject) {
+					results.push({ row: index + 1, error: `Subject not found`, subjectId, subjectName, standard });
+					continue;
+				}
 
-                // Create mapping
-                const mapping = await TeacherSubject.create({
-                    teacherId,
-                    teacherName: teacher.name,
-                    subjectId: subject._id,
-                    subjectName: subject.subject_name,
-                    standard: subject.standard,
-                    preferredPeriods: [],
-                    avoidPeriods: [],
-                    consecutivePeriods: false
-                });
+				// Skip duplicates
+				const existingMapping = await TeacherSubject.findOne({ teacherId, subjectId: subject._id });
+				if (existingMapping) {
+					results.push({ row: index + 1, error: `Mapping already exists for teacher ${teacherId} and subject ${subject._id.toString()}` });
+					continue;
+				}
 
-                results.push({
-                    success: true,
-                    id: mapping._id,
-                    teacherId: mapping.teacherId,
-                    teacherName: mapping.teacherName,
-                    subjectName: mapping.subjectName,
-                    standard: mapping.standard
-                });
-                addedCount++;
-            } catch (error) {
-                results.push({ row: index + 1, error: `Failed to create mapping: ${error.message}` });
-            }
-        }
+				// Create mapping
+				const mapping = await TeacherSubject.create({
+					teacherId,
+					teacherName: teacher.name,
+					subjectId: subject._id,
+					subjectName: subject.subject_name,
+					standard: subject.standard,
+					preferredPeriods: [],
+					avoidPeriods: [],
+					consecutivePeriods: false
+				});
+
+				results.push({
+					success: true,
+					id: mapping._id,
+					teacherId: mapping.teacherId,
+					teacherName: mapping.teacherName,
+					subjectName: mapping.subjectName,
+					standard: mapping.standard
+				});
+				addedCount++;
+			} catch (error) {
+				results.push({ row: index + 1, error: `Failed to create mapping: ${error.message}` });
+			}
+		}
 
 		// Clean up uploaded file
 		fs.unlinkSync(req.file.path);
@@ -419,9 +435,13 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 		console.error('Error uploading teacher-subject mappings:', error);
 		console.error('Error details:', error.message);
 		console.error('Error stack:', error.stack);
-		return res.status(500).json({ 
+		// Clean up uploaded file in case of error
+		if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+			fs.unlinkSync(req.file.path);
+		}
+		return res.status(500).json({
 			error: 'Failed to upload teacher-subject mappings',
-			details: error.message 
+			details: error.message
 		});
 	}
 });
@@ -430,8 +450,8 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 router.delete('/all', async (req, res) => {
 	try {
 		const result = await TeacherSubject.deleteMany({});
-		return res.json({ 
-			success: true, 
+		return res.json({
+			success: true,
 			message: `Deleted ${result.deletedCount} teacher-subject mappings`,
 			deletedCount: result.deletedCount
 		});

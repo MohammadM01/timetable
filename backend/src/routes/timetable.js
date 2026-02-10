@@ -5,6 +5,7 @@ import TeacherSubject from '../models/TeacherSubject.js';
 import Teacher from '../models/Teacher.js';
 import Subject from '../models/Subject.js';
 import Class from '../models/Class.js';
+import { escapeRegex } from '../utils/helpers.js';
 
 const router = Router();
 
@@ -316,7 +317,7 @@ router.get('/teachers/:standard/:subjectName', async (req, res) => {
 		const { standard, subjectName } = req.params;
 		const teacherSubjects = await TeacherSubject.find({
 			standard,
-			subjectName: new RegExp(subjectName, 'i')
+			subjectName: new RegExp(escapeRegex(subjectName), 'i')
 		}).lean();
 
 		const formatted = teacherSubjects.map(ts => ({
