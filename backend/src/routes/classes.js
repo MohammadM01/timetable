@@ -13,7 +13,12 @@ const upload = multer({ storage: multer.memoryStorage() });
 // Get all classes
 router.get('/', async (_req, res) => {
 	try {
-		const classes = await Class.find({}).sort({ standard: 1, division: 1 }).lean();
+		let classes = await Class.find({}).lean();
+		// In-memory sort to avoid Appwrite missing index errors
+		classes.sort((a, b) => {
+			if (a.standard !== b.standard) return String(a.standard).localeCompare(String(b.standard), undefined, { numeric: true });
+			return String(a.division).localeCompare(String(b.division));
+		});
 		const formatted = classes.map((c) => ({
 			id: c._id,
 			standard: c.standard,
@@ -22,6 +27,7 @@ router.get('/', async (_req, res) => {
 		}));
 		return res.json(formatted);
 	} catch (e) {
+		console.error('Error fetching classes:', e);
 		return res.status(500).json({ error: 'Failed to fetch classes' });
 	}
 });
@@ -189,20 +195,31 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
 		if (classes.length === 0) return res.status(400).json({ error: 'No valid rows' });
 
+
+		// Optimize duplicate checking
+		const existingClasses = await Class.find({}).lean();
+		const existingMap = new Set(existingClasses.map(c =>
+			`${(c.standard || '').toString().toLowerCase().trim()}-${(c.division || '').toString().toLowerCase().trim()}`
+		));
+
 		for (const c of classes) {
-			const exists = await Class.findOne({
-				standard: new RegExp('^' + escapeRegex(c.standard) + '$', 'i'),
-				division: new RegExp('^' + escapeRegex(c.division) + '$', 'i')
-			});
-			if (exists) continue;
+			const key = `${c.standard.toLowerCase().trim()}-${c.division.toLowerCase().trim()}`;
+			if (existingMap.has(key)) continue;
+
 			await Class.create({
 				standard: c.standard,
 				division: c.division,
 				full_name: c.full_name || `${c.standard} ${c.division}`
 			});
+			existingMap.add(key);
 		}
 
-		const all = await Class.find({}).sort({ standard: 1, division: 1 }).lean();
+		let all = await Class.find({}).lean();
+		all.sort((a, b) => {
+			if (a.standard !== b.standard) return String(a.standard).localeCompare(String(b.standard), undefined, { numeric: true });
+			return String(a.division).localeCompare(String(b.division));
+		});
+
 		return res.json(all.map(c => ({
 			id: c._id,
 			standard: c.standard,
@@ -210,6 +227,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 			full_name: c.full_name
 		})));
 	} catch (e) {
+		console.error('Error uploading classes:', e);
 		return res.status(500).json({ error: 'Failed to upload classes' });
 	}
 });

@@ -1,30 +1,9 @@
-import mongoose from 'mongoose';
+import AppwriteModel from '../utils/AppwriteModel.js';
 
-const counterSchema = new mongoose.Schema({
-	key: { type: String, required: true, unique: true },
-	seq: { type: Number, default: 0 }
-});
+class CounterModel extends AppwriteModel {
+	constructor() {
+		super('counters');
+	}
+}
 
-export default mongoose.model('Counter', counterSchema);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+export default new CounterModel();

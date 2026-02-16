@@ -5,9 +5,15 @@ const router = Router();
 
 router.get('/', async (_req, res) => {
 	try {
-		const subs = await Subject.find({}).sort({ standard: 1, subject_name: 1 }).lean();
+		let subs = await Subject.find({}).lean();
+		// In-memory sort
+		subs.sort((a, b) => {
+			if (a.standard !== b.standard) return String(a.standard).localeCompare(String(b.standard), undefined, { numeric: true });
+			return String(a.subject_name).localeCompare(String(b.subject_name));
+		});
 		return res.json(subs.map(s => ({ id: s._id.toString(), standard: s.standard, subject_name: s.subject_name, weekly_periods: s.weekly_periods, consecutive_periods: s.consecutive_periods })));
 	} catch (e) {
+		console.error('Error fetching subjects:', e);
 		return res.status(500).json({ error: 'Failed to fetch subjects' });
 	}
 });
@@ -20,7 +26,7 @@ router.post('/', async (req, res) => {
 			subject_name: s.subject_name,
 			weekly_periods: Number(s.weekly_periods) || 0,
 			consecutive_periods: Boolean(s.consecutive_periods)
-		})), { ordered: false }).catch(() => {});
+		})), { ordered: false }).catch(() => { });
 		return res.json({ success: true });
 	} catch (e) {
 		return res.status(400).json({ error: 'Failed to save subjects' });
@@ -36,10 +42,16 @@ router.post('/import', async (req, res) => {
 			subject_name: s.subject_name,
 			weekly_periods: Number(s.weekly_periods) || 0,
 			consecutive_periods: Boolean(s.consecutive_periods)
-		})), { ordered: false }).catch(() => {});
-		const all = await Subject.find({}).sort({ standard: 1, subject_name: 1 }).lean();
+		})), { ordered: false }).catch(() => { });
+
+		let all = await Subject.find({}).lean();
+		all.sort((a, b) => {
+			if (a.standard !== b.standard) return String(a.standard).localeCompare(String(b.standard), undefined, { numeric: true });
+			return String(a.subject_name).localeCompare(String(b.subject_name));
+		});
 		return res.json({ subjects: all.map(s => ({ id: s._id.toString(), standard: s.standard, subject_name: s.subject_name, weekly_periods: s.weekly_periods, consecutive_periods: s.consecutive_periods })) });
 	} catch (e) {
+		console.error('Error importing subjects:', e);
 		return res.status(500).json({ error: 'Failed to import subjects' });
 	}
 });
@@ -62,9 +74,15 @@ router.post('/cleanup-duplicates', async (_req, res) => {
 router.delete('/:id', async (req, res) => {
 	try {
 		await Subject.findByIdAndDelete(req.params.id);
-		const remaining = await Subject.find({}).sort({ standard: 1, subject_name: 1 }).lean();
+
+		let remaining = await Subject.find({}).lean();
+		remaining.sort((a, b) => {
+			if (a.standard !== b.standard) return String(a.standard).localeCompare(String(b.standard), undefined, { numeric: true });
+			return String(a.subject_name).localeCompare(String(b.subject_name));
+		});
 		return res.json({ subjects: remaining.map(s => ({ id: s._id.toString(), standard: s.standard, subject_name: s.subject_name, weekly_periods: s.weekly_periods, consecutive_periods: s.consecutive_periods })) });
 	} catch (e) {
+		console.error('Error deleting subject:', e);
 		return res.status(400).json({ error: 'Failed to delete subject' });
 	}
 });
@@ -90,8 +108,8 @@ router.put('/:id', async (req, res) => {
 router.delete('/all', async (req, res) => {
 	try {
 		const result = await Subject.deleteMany({});
-		return res.json({ 
-			success: true, 
+		return res.json({
+			success: true,
 			message: `Deleted ${result.deletedCount} subjects`,
 			deletedCount: result.deletedCount
 		});

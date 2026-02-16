@@ -536,12 +536,15 @@ class TimetableGenerator {
 	}
 
 	async saveTimetable(teachers, subjects, classes) {
-		const timetableDoc = new Timetable({
+		// Remove old timetables
+		await Timetable.deleteMany({});
+
+		const timetableDoc = await Timetable.create({
 			schoolConfig: this.config,
 			timetable: this.timetable,
 			teacherSchedule: this.teacherSchedule,
 			generationStatus: 'completed',
-			generationLog: this.log,
+			generationLog: this.log || [],
 			stats: {
 				totalClasses: classes.length,
 				totalTeachers: teachers.length,
@@ -551,10 +554,7 @@ class TimetableGenerator {
 			}
 		});
 
-		// Remove old timetables
-		await Timetable.deleteMany({});
-
-		return await timetableDoc.save();
+		return timetableDoc;
 	}
 
 	// Get teacher timetable from generated schedule

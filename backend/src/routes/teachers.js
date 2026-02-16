@@ -8,11 +8,12 @@ import { escapeRegex } from '../utils/helpers.js';
 
 const getNextId = async () => {
 	let counter = await Counter.findOneAndUpdate({ key: 'teacher' }, { $inc: { seq: 1 } }, { upsert: true, new: true });
-	const existing = await Teacher.findOne({ id: counter.seq });
-	if (existing) {
-		const last = await Teacher.findOne().sort({ id: -1 });
-		const maxId = last ? last.id : 0;
-		counter = await Counter.findOneAndUpdate({ key: 'teacher' }, { seq: maxId + 1 }, { upsert: true, new: true });
+	// Check if this ID is already taken (collision check)
+	let existing = await Teacher.findOne({ id: counter.seq });
+	// If taken, keep incrementing until we find a free one
+	while (existing) {
+		counter = await Counter.findOneAndUpdate({ key: 'teacher' }, { $inc: { seq: 1 } }, { upsert: true, new: true });
+		existing = await Teacher.findOne({ id: counter.seq });
 	}
 	return counter.seq;
 };
@@ -99,7 +100,13 @@ router.get('/test', async (_req, res) => {
 		// Ensure all teachers have rowOrder (migration for existing data)
 		await Teacher.updateMany({ rowOrder: { $exists: false } }, { $set: { rowOrder: 0 } });
 
-		const teachers = await Teacher.find({}).sort({ rowOrder: 1, id: 1 }).lean();
+
+		let teachers = await Teacher.find({}).lean();
+		// In-memory sort
+		teachers.sort((a, b) => {
+			if (a.rowOrder !== b.rowOrder) return (a.rowOrder || 0) - (b.rowOrder || 0);
+			return (a.id || 0) - (b.id || 0);
+		});
 		const principal = await Principal.findOne({}).lean();
 		return res.json({
 			teachers: teachers.map(t => ({ id: t.id, name: t.name, weeklyPeriods: t.weeklyPeriods, dailyPeriods: t.dailyPeriods })),
@@ -116,10 +123,17 @@ router.get('/', async (_req, res) => {
 		// First, ensure all teachers have rowOrder (migration for existing data)
 		await Teacher.updateMany({ rowOrder: { $exists: false } }, { $set: { rowOrder: 0 } });
 
-		const [teachers, principal] = await Promise.all([
-			Teacher.find({}).sort({ rowOrder: 1, id: 1 }).lean(),
-			Principal.findOne({}).lean()
+		const [teachersRaw, principal] = await Promise.all([
+			Teacher.find({}).lean(),
+			Principal.findOne({})
 		]);
+
+		let teachers = teachersRaw;
+		// In-memory sort
+		teachers.sort((a, b) => {
+			if (a.rowOrder !== b.rowOrder) return (a.rowOrder || 0) - (b.rowOrder || 0);
+			return (a.id || 0) - (b.id || 0);
+		});
 		const formatted = teachers.map((t) => {
 			console.log('Teacher data:', { id: t.id, name: t.name, weeklyPeriods: t.weeklyPeriods, dailyPeriods: t.dailyPeriods });
 			return { id: t.id, name: t.name, weeklyPeriods: t.weeklyPeriods, dailyPeriods: t.dailyPeriods };
@@ -140,6 +154,7 @@ router.get('/', async (_req, res) => {
 		}
 		return res.json(formatted);
 	} catch (e) {
+		console.error('Error fetching teachers:', e);
 		return res.status(500).json({ error: 'Failed to fetch teachers' });
 	}
 });
@@ -404,19 +419,34 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 		console.log('Sample valid teachers:', validTeachers.slice(0, 3));
 
 		if (validTeachers.length === 0) return res.status(400).json({ error: 'No valid rows' });
+
+		// Optimize duplicate checking: fetch all existing names first
+		const existingTeachers = await Teacher.find({}).lean();
+		const existingNames = new Set(existingTeachers.map(t => (t.name || '').toLowerCase().trim()));
+
+		if (validTeachers.length === 0) return res.status(400).json({ error: 'No valid rows' });
+
 		for (const t of validTeachers) {
-			const exists = await Teacher.findOne({ name: new RegExp('^' + escapeRegex(t.name) + '$', 'i') });
-			if (exists) continue;
+			const normalizedName = (t.name || '').toLowerCase().trim();
+			if (existingNames.has(normalizedName)) continue;
+
 			const safeId = await getNextId();
 			const newTeacher = await Teacher.create({ id: safeId, rowOrder: t.rowOrder, name: t.name, weeklyPeriods: t.weeklyPeriods, dailyPeriods: t.dailyPeriods });
 			console.log('Created teacher:', newTeacher);
+			existingNames.add(normalizedName); // Add to set to prevent duplicates within the file itself
 		}
 		// Ensure all teachers have rowOrder (migration for existing data)
 		await Teacher.updateMany({ rowOrder: { $exists: false } }, { $set: { rowOrder: 0 } });
 
-		const all = await Teacher.find({}).sort({ rowOrder: 1, id: 1 }).lean();
+
+		let all = await Teacher.find({}).lean();
+		all.sort((a, b) => {
+			if (a.rowOrder !== b.rowOrder) return (a.rowOrder || 0) - (b.rowOrder || 0);
+			return (a.id || 0) - (b.id || 0);
+		});
 		return res.json(all.map(t => ({ id: t.id, name: t.name, weeklyPeriods: t.weeklyPeriods, dailyPeriods: t.dailyPeriods })));
 	} catch (e) {
+		console.error('Error uploading teachers:', e);
 		return res.status(500).json({ error: 'Failed to upload teachers' });
 	}
 });
@@ -428,9 +458,13 @@ router.post('/principal', async (req, res) => {
 		await Principal.deleteMany({});
 		const principal = await Principal.create({ name, weekly_periods: Number(weeklyPeriods) || 0, daily_max_periods: Number(dailyPeriods) || 0 });
 		// If principal exists as a teacher, remove
-		await Teacher.deleteOne({ name: new RegExp('^' + name + '$', 'i') });
+		const teacherToRemove = await Teacher.findOne({ name: new RegExp('^' + escapeRegex(name) + '$', 'i') });
+		if (teacherToRemove) {
+			await Teacher.findByIdAndDelete(teacherToRemove.id);
+		}
 		return res.json({ message: 'Principal saved' });
 	} catch (e) {
+		console.error('Error saving principal:', e);
 		return res.status(400).json({ error: 'Failed to save principal' });
 	}
 });

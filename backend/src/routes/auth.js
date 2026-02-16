@@ -23,7 +23,7 @@ router.post('/login', async (req, res) => {
 		const { username, password } = req.body || {};
 		const user = await User.findOne({ username });
 		if (!user) return res.status(401).json({ error: 'Invalid credentials' });
-		const ok = await user.verifyPassword(password || '');
+		const ok = await bcrypt.compare(password || '', user.passwordHash);
 		if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
 		const token = signToken(user);
 		return res.json({ success: true, token, user: { id: user._id, username: user.username } });

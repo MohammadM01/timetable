@@ -1,49 +1,34 @@
-import mongoose from 'mongoose';
+import AppwriteModel from '../utils/AppwriteModel.js';
 
-const timetableSchema = new mongoose.Schema({
-	// School configuration
-	schoolConfig: {
-		daysPerWeek: { type: Number, default: 6 }, // Include Saturday
-		periodsPerDay: { type: Number, default: 8 },
-		periodDuration: { type: Number, default: 45 }, // minutes
-		startTime: { type: String, default: '08:00' },
-		recessAfterPeriod: { type: Number, default: 4 } // Add recess after 4th period
-	},
-	
-	// Generated timetable data
-	timetable: {
-		// Structure: { classId: { day: { period: { subject, teacher, room } } } }
-		type: mongoose.Schema.Types.Mixed,
-		default: {}
-	},
-	
-	// Teacher assignments: { teacherId: { day: { period: { classId, subject } } } }
-	teacherSchedule: {
-		type: mongoose.Schema.Types.Mixed,
-		default: {}
-	},
-	
-	// Generation metadata
-	generatedAt: { type: Date, default: Date.now },
-	generationStatus: { 
-		type: String, 
-		enum: ['pending', 'generating', 'completed', 'failed'], 
-		default: 'pending' 
-	},
-	generationLog: [String],
-	
-	// Statistics
-	stats: {
-		totalClasses: { type: Number, default: 0 },
-		totalTeachers: { type: Number, default: 0 },
-		totalSubjects: { type: Number, default: 0 },
-		conflicts: { type: Number, default: 0 },
-		unassignedPeriods: { type: Number, default: 0 }
+class TimetableModel extends AppwriteModel {
+	constructor() {
+		super('timetables');
 	}
-}, { timestamps: true });
 
-// Index for quick lookups
-timetableSchema.index({ generatedAt: -1 });
-timetableSchema.index({ generationStatus: 1 });
+	async create(data) {
+		const payload = { ...data };
+		// Appwrite doesn't support nested objects, so we stringify them
+		if (payload.timetable && typeof payload.timetable === 'object') payload.timetable = JSON.stringify(payload.timetable);
+		if (payload.teacherSchedule && typeof payload.teacherSchedule === 'object') payload.teacherSchedule = JSON.stringify(payload.teacherSchedule);
+		if (payload.schoolConfig && typeof payload.schoolConfig === 'object') payload.schoolConfig = JSON.stringify(payload.schoolConfig);
+		if (payload.stats && typeof payload.stats === 'object') payload.stats = JSON.stringify(payload.stats);
+		if (payload.generationLog && typeof payload.generationLog === 'object') payload.generationLog = JSON.stringify(payload.generationLog);
 
-export default mongoose.model('Timetable', timetableSchema);
+		return super.create(payload);
+	}
+
+	_transform(doc) {
+		const data = super._transform(doc);
+		if (!data) return null;
+
+		try { if (data.timetable && typeof data.timetable === 'string') data.timetable = JSON.parse(data.timetable); } catch (e) { }
+		try { if (data.teacherSchedule && typeof data.teacherSchedule === 'string') data.teacherSchedule = JSON.parse(data.teacherSchedule); } catch (e) { }
+		try { if (data.schoolConfig && typeof data.schoolConfig === 'string') data.schoolConfig = JSON.parse(data.schoolConfig); } catch (e) { }
+		try { if (data.stats && typeof data.stats === 'string') data.stats = JSON.parse(data.stats); } catch (e) { }
+		try { if (data.generationLog && typeof data.generationLog === 'string') data.generationLog = JSON.parse(data.generationLog); } catch (e) { }
+
+		return data;
+	}
+}
+
+export default new TimetableModel();

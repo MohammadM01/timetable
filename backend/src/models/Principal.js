@@ -1,12 +1,9 @@
-import mongoose from 'mongoose';
+import AppwriteModel from '../utils/AppwriteModel.js';
 
-const principalSchema = new mongoose.Schema({
-	name: { type: String, required: true, trim: true },
-	weekly_periods: { type: Number, default: 0 },
-	daily_max_periods: { type: Number, default: 5 },
-}, { timestamps: true });
+class PrincipalModel extends AppwriteModel {
+	constructor() {
+		super('principals');
+	}
+}
 
-export default mongoose.model('Principal', principalSchema);
-
-
-
+export default new PrincipalModel();
