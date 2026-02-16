@@ -17,23 +17,37 @@ const upload = multer({ dest: 'uploads/' });
 // Get all teacher-subject mappings
 router.get('/', async (req, res) => {
 	try {
-		const mappings = await TeacherSubject.find({})
-			.populate('subjectId', 'subject_name standard weekly_periods')
-			.sort({ teacherName: 1, standard: 1, subjectName: 1 })
-			.lean();
+		// Fetch all mappings
+		let mappings = await TeacherSubject.find({}).lean();
 
-		const formatted = mappings.map(m => ({
-			id: m._id,
-			teacherId: m.teacherId,
-			teacherName: m.teacherName,
-			subjectId: m.subjectId._id,
-			subjectName: m.subjectName,
-			standard: m.standard,
-			weeklyPeriods: m.subjectId.weekly_periods,
-			preferredPeriods: m.preferredPeriods || [],
-			avoidPeriods: m.avoidPeriods || [],
-			consecutivePeriods: m.consecutivePeriods || false
-		}));
+		// Manually populate subjects since AppwriteModel populate is limited
+		const subjectIds = [...new Set(mappings.map(m => m.subjectId))];
+		const subjectDocs = await Promise.all(subjectIds.map(id => Subject.findById(id)));
+		const subjectMap = {};
+		subjectDocs.forEach(s => { if (s) subjectMap[s._id] = s; });
+
+		const formatted = mappings.map(m => {
+			const s = subjectMap[m.subjectId];
+			return {
+				id: m._id,
+				teacherId: m.teacherId,
+				teacherName: m.teacherName,
+				subjectId: m.subjectId,
+				subjectName: m.subjectName || (s ? s.subject_name : 'Unknown'),
+				standard: m.standard || (s ? s.standard : 'Unknown'),
+				weeklyPeriods: s ? s.weekly_periods : 0,
+				preferredPeriods: m.preferredPeriods || [],
+				avoidPeriods: m.avoidPeriods || [],
+				consecutivePeriods: m.consecutivePeriods || false
+			};
+		}).filter(m => m.subjectName !== 'Unknown');
+
+		// In-memory sort
+		formatted.sort((a, b) => {
+			if (a.teacherName !== b.teacherName) return a.teacherName.localeCompare(b.teacherName);
+			if (a.standard !== b.standard) return String(a.standard).localeCompare(String(b.standard), undefined, { numeric: true });
+			return a.subjectName.localeCompare(b.subjectName);
+		});
 
 		return res.json(formatted);
 	} catch (error) {

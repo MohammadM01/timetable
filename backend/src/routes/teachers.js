@@ -120,8 +120,6 @@ router.get('/test', async (_req, res) => {
 // Get all teachers (excluding principal)
 router.get('/', async (_req, res) => {
 	try {
-		// First, ensure all teachers have rowOrder (migration for existing data)
-		await Teacher.updateMany({ rowOrder: { $exists: false } }, { $set: { rowOrder: 0 } });
 
 		const [teachersRaw, principal] = await Promise.all([
 			Teacher.find({}).lean(),

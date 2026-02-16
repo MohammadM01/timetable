@@ -13,18 +13,18 @@ const SubjectAssignment = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  
+
   // Filter states
   const [filterTeacher, setFilterTeacher] = useState('');
   const [filterSubject, setFilterSubject] = useState('');
   const [filterStandard, setFilterStandard] = useState('');
   const [viewMode, setViewMode] = useState('teacher'); // 'teacher' or 'subject' or 'standard'
-  
+
   // Assignment form states
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedTeacher, setSelectedTeacher] = useState('');
   const [selectedSubject, setSelectedSubject] = useState('');
-  
+
   // Upload states
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [uploadFile, setUploadFile] = useState(null);
@@ -38,9 +38,19 @@ const SubjectAssignment = () => {
 
         console.log('Starting to fetch data...');
 
+        // Fetch teachers directly
+        console.log('Fetching teachers...');
+        const teachersResponse = await fetch(`http://localhost:5000/api/teachers?t=${Date.now()}`);
+        if (!teachersResponse.ok) {
+          throw new Error(`Failed to fetch teachers: ${teachersResponse.status}`);
+        }
+        const teachersData = await teachersResponse.json();
+        console.log('Teachers fetched:', teachersData);
+        setTeachers(teachersData);
+
         // Fetch subjects
         console.log('Fetching subjects...');
-        const subjectsResponse = await fetch('http://localhost:5000/api/subjects');
+        const subjectsResponse = await fetch(`http://localhost:5000/api/subjects?t=${Date.now()}`);
         if (!subjectsResponse.ok) {
           throw new Error(`Failed to fetch subjects: ${subjectsResponse.status}`);
         }
@@ -50,7 +60,7 @@ const SubjectAssignment = () => {
 
         // Fetch classes
         console.log('Fetching classes...');
-        const classesResponse = await fetch('http://localhost:5000/api/classes');
+        const classesResponse = await fetch(`http://localhost:5000/api/classes?t=${Date.now()}`);
         if (!classesResponse.ok) {
           throw new Error(`Failed to fetch classes: ${classesResponse.status}`);
         }
@@ -61,7 +71,7 @@ const SubjectAssignment = () => {
           const standardB = b.standard.toLowerCase();
           const divisionA = a.division.toLowerCase();
           const divisionB = b.division.toLowerCase();
-          
+
           if (standardA !== standardB) {
             return standardA.localeCompare(standardB);
           }
@@ -71,7 +81,7 @@ const SubjectAssignment = () => {
 
         // Fetch existing assignments
         console.log('Fetching assignments...');
-        const assignmentsResponse = await fetch('http://localhost:5000/api/teacher-subjects');
+        const assignmentsResponse = await fetch(`http://localhost:5000/api/teacher-subjects?t=${Date.now()}`);
         if (!assignmentsResponse.ok) {
           throw new Error(`Failed to fetch assignments: ${assignmentsResponse.status}`);
         }
@@ -80,15 +90,6 @@ const SubjectAssignment = () => {
         console.log('Number of assignments:', assignmentsData.length);
         setAssignments(assignmentsData);
 
-        // Use teachers directly from context
-        console.log('Using teachers from context:', existingTeachers);
-        if (existingTeachers && existingTeachers.length > 0) {
-          setTeachers(existingTeachers);
-        } else {
-          console.warn('No teachers found in context');
-          setError('No teachers found. Please add teachers first.');
-        }
-        
         console.log('Data fetch completed successfully');
         setLoading(false);
       } catch (err) {
@@ -99,7 +100,7 @@ const SubjectAssignment = () => {
     };
 
     fetchData();
-  }, [existingTeachers]);
+  }, []);
 
   // Filter assignments based on current filters
   const getFilteredAssignments = () => {
@@ -280,7 +281,7 @@ const SubjectAssignment = () => {
     try {
       setError('');
       setSuccess('');
-      
+
       const result = await api.deleteAllTeacherSubjects();
       setAssignments([]);
       setSuccess(result.message || `Successfully deleted all ${result.deletedCount} assignments`);
@@ -311,7 +312,7 @@ const SubjectAssignment = () => {
       }
 
       const result = await response.json();
-      
+
       // Refresh assignments
       const assignmentsResponse = await fetch('http://localhost:5000/api/teacher-subjects');
       const assignmentsData = await assignmentsResponse.json();
@@ -347,12 +348,12 @@ const SubjectAssignment = () => {
   return (
     <div className="p-6">
       <h2 className="text-3xl font-bold text-purple-600 mb-6">Subject Assignment Management</h2>
-      
+
       {/* Debug Info */}
       <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded mb-4 text-sm">
         <strong>Debug Info:</strong> Teachers: {teachers.length}, Subjects: {subjects.length}, Classes: {classes.length}, Assignments: {assignments.length}
       </div>
-      
+
       {/* Error and Success Messages */}
       {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{error}</div>}
       {success && <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">{success}</div>}
@@ -367,7 +368,7 @@ const SubjectAssignment = () => {
             >
               {showAddForm ? 'Cancel' : '+ Add Assignment'}
             </button>
-            
+
             <button
               onClick={() => setShowUploadForm(!showUploadForm)}
               className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 transition duration-200"
@@ -375,7 +376,7 @@ const SubjectAssignment = () => {
               {showUploadForm ? 'Cancel' : '📁 Upload Sheet'}
             </button>
           </div>
-          
+
           {assignments.length > 0 && (
             <button
               onClick={handleDeleteAllAssignments}
