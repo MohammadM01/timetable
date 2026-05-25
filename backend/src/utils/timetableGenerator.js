@@ -3,6 +3,7 @@ import Subject from '../models/Subject.js';
 import Class from '../models/Class.js';
 import TeacherSubject from '../models/TeacherSubject.js';
 import Timetable from '../models/Timetable.js';
+import Principal from '../models/Principal.js';
 import AIPreferenceParser from './aiPreferenceParser.js';
 
 class TimetableGenerator {
@@ -23,7 +24,10 @@ class TimetableGenerator {
 		this.unassignedPeriods = [];
 		this.log = [];
 
-
+		// Teacher period limit tracking
+		this.teacherLimits = {};      // { teacherId: { weeklyPeriods, dailyPeriods, name } }
+		this.teacherWeeklyCount = {}; // { teacherId: totalAssignedThisWeek }
+		this.teacherDailyCount = {};  // { teacherId: { dayNum: count } }
 	}
 
 	getPeriodsForDay(dayNum) {
@@ -56,12 +60,38 @@ class TimetableGenerator {
 			}
 
 			// Fetch all data
-			const [teachers, subjects, classes, teacherSubjects] = await Promise.all([
+			const [teachers, subjects, classes, teacherSubjects, principalDoc] = await Promise.all([
 				Teacher.find({}).lean(),
 				Subject.find({}).lean(),
 				Class.find({}).lean(),
-				TeacherSubject.find({}).lean()
+				TeacherSubject.find({}).lean(),
+				Principal.findOne({})
 			]);
+
+			// Build teacher limits map from database records
+			for (const t of teachers) {
+				const tId = t.id?.toString();
+				if (tId) {
+					this.teacherLimits[tId] = {
+						weeklyPeriods: t.weeklyPeriods || 999,
+						dailyPeriods: t.dailyPeriods || 999,
+						name: t.name
+					};
+					this.teacherWeeklyCount[tId] = 0;
+					this.teacherDailyCount[tId] = {};
+				}
+			}
+			// Include principal if present
+			if (principalDoc) {
+				this.teacherLimits['principal'] = {
+					weeklyPeriods: principalDoc.weekly_periods || 999,
+					dailyPeriods: principalDoc.daily_max_periods || 999,
+					name: principalDoc.name
+				};
+				this.teacherWeeklyCount['principal'] = 0;
+				this.teacherDailyCount['principal'] = {};
+			}
+			this.log.push(`Loaded period limits for ${Object.keys(this.teacherLimits).length} teachers`);
 
 			// Use target classes if specified, otherwise use all classes
 			const classesToProcess = this.targetClasses || classes;
@@ -85,6 +115,12 @@ class TimetableGenerator {
 			for (const classData of shuffledClasses) {
 				await this.generateClassTimetable(classData, subjectsByStandard[classData.standard] || [], teacherSubjectMap);
 			}
+
+			// FINAL PASS: Fill ALL remaining free periods — no class should have any free slots
+			this.fillAllFreePeriods(shuffledClasses, subjectsByStandard, teacherSubjectMap);
+
+			// Post-generation verification: log teacher weekly/daily stats
+			this.verifyTeacherLimits();
 
 			// Save to database
 			const timetableDoc = await this.saveTimetable(teachers, subjects, shuffledClasses);
@@ -335,9 +371,11 @@ class TimetableGenerator {
 				continue;
 			}
 
-			// Find best teacher for these periods with constraints check (strict max 2 continuous active/free)
+			// Find best teacher for these periods with constraints check
 			let teacher = null;
-			for (let level = 1; level <= 3; level++) {
+			// Levels 1-3: respect weekly/daily limits + other constraints
+			// Level 4: ignore weekly/daily limits (only double-booking + consecutive)
+			for (let level = 1; level <= 4; level++) {
 				teacher = this.findBestTeacherWithConstraints(availableTeachers, availablePeriods, day, level);
 				if (teacher) {
 					if (level > 1) {
@@ -372,6 +410,14 @@ class TimetableGenerator {
 					className: classData.full_name,
 					subject: subject.subject_name
 				};
+
+				// Increment teacher weekly/daily counters
+				const tId = teacher.teacherId?.toString();
+				if (tId) {
+					this.teacherWeeklyCount[tId] = (this.teacherWeeklyCount[tId] || 0) + 1;
+					if (!this.teacherDailyCount[tId]) this.teacherDailyCount[tId] = {};
+					this.teacherDailyCount[tId][day] = (this.teacherDailyCount[tId][day] || 0) + 1;
+				}
 
 				totalAllocated++;
 			}
@@ -477,6 +523,23 @@ class TimetableGenerator {
 
 		for (const t of shuffledTeachers) {
 			const teacherId = t.teacherId;
+			const tId = teacherId?.toString();
+
+			// === SOFT CHECK: Weekly period limit (relaxed at level 4) ===
+			if (strictnessLevel <= 3 && tId && this.teacherLimits[tId]) {
+				const currentWeekly = this.teacherWeeklyCount[tId] || 0;
+				if (currentWeekly + periods.length > this.teacherLimits[tId].weeklyPeriods) {
+					continue; // Would exceed weekly limit
+				}
+			}
+
+			// === SOFT CHECK: Daily period limit (relaxed at level 4) ===
+			if (strictnessLevel <= 3 && tId && this.teacherLimits[tId]) {
+				const currentDaily = this.teacherDailyCount[tId]?.[day] || 0;
+				if (currentDaily + periods.length > this.teacherLimits[tId].dailyPeriods) {
+					continue; // Would exceed daily limit
+				}
+			}
 
 			// Check double-booking (no teacher overlap)
 			let isFree = true;
@@ -518,8 +581,8 @@ class TimetableGenerator {
 
 			if (maxContinuous > 2) continue;
 
-			if (strictnessLevel === 3) {
-				return t; // Level 3: Overlap check and consecutive active check only
+			if (strictnessLevel >= 3) {
+				return t; // Level 3+: Overlap check, consecutive check, (and weekly/daily at L3 only)
 			}
 
 			// 2. Max free continuous periods check (gaps) (max allowed: 2 for strict, 3 for relaxed)
@@ -573,9 +636,9 @@ class TimetableGenerator {
 			const availablePeriods = this.findAvailablePeriodsOptimized(classData._id, day, remainingPeriods);
 			if (availablePeriods.length === 0) continue;
 
-			// Use the new constraints-aware teacher check with fallback relaxation
+			// Use constraints with fallback — level 4 ignores weekly/daily limits
 			let teacher = null;
-			for (let level = 1; level <= 3; level++) {
+			for (let level = 1; level <= 4; level++) {
 				teacher = this.findBestTeacherWithConstraints(availableTeachers, availablePeriods, day, level);
 				if (teacher) break;
 			}
@@ -602,10 +665,44 @@ class TimetableGenerator {
 					subject: subject.subject_name
 				};
 
+				// Increment teacher weekly/daily counters
+				const tId = teacher.teacherId?.toString();
+				if (tId) {
+					this.teacherWeeklyCount[tId] = (this.teacherWeeklyCount[tId] || 0) + 1;
+					if (!this.teacherDailyCount[tId]) this.teacherDailyCount[tId] = {};
+					this.teacherDailyCount[tId][day] = (this.teacherDailyCount[tId][day] || 0) + 1;
+				}
+
 				remainingPeriods--;
 				if (remainingPeriods <= 0) break;
 			}
 		}
+	}
+
+	verifyTeacherLimits() {
+		this.log.push('--- Post-Generation Teacher Limit Verification ---');
+		let weeklyViolations = 0;
+		let dailyViolations = 0;
+
+		for (const [tId, limits] of Object.entries(this.teacherLimits)) {
+			const weeklyActual = this.teacherWeeklyCount[tId] || 0;
+			if (weeklyActual > limits.weeklyPeriods) {
+				weeklyViolations++;
+				this.log.push(`⚠️ WEEKLY VIOLATION: Teacher ${limits.name} (ID: ${tId}) assigned ${weeklyActual} periods, limit is ${limits.weeklyPeriods}`);
+			} else if (weeklyActual > 0) {
+				this.log.push(`✅ Teacher ${limits.name}: ${weeklyActual}/${limits.weeklyPeriods} weekly periods`);
+			}
+
+			const dailyCounts = this.teacherDailyCount[tId] || {};
+			for (const [dayNum, count] of Object.entries(dailyCounts)) {
+				if (count > limits.dailyPeriods) {
+					dailyViolations++;
+					this.log.push(`⚠️ DAILY VIOLATION: Teacher ${limits.name} (ID: ${tId}) assigned ${count} periods on day ${dayNum}, limit is ${limits.dailyPeriods}`);
+				}
+			}
+		}
+
+		this.log.push(`Verification: ${weeklyViolations} weekly violations, ${dailyViolations} daily violations`);
 	}
 
 	async saveTimetable(teachers, subjects, classes) {

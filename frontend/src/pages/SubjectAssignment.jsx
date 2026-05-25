@@ -753,41 +753,104 @@ const SubjectAssignment = () => {
 
             {viewMode === 'standard' && (
               <div className="space-y-6">
-                {getAssignmentsByStandard().map(({ standard, assignments }) => (
-                  <div key={standard} className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-center mb-4">
-                      <div className="flex-shrink-0 h-10 w-10 bg-green-100 rounded-full flex items-center justify-center">
-                        <span className="text-lg font-medium text-green-600">
-                          {standard}
-                        </span>
+                {getAssignmentsByStandard()
+                  .sort((a, b) => romanToVal(a.standard) - romanToVal(b.standard))
+                  .map(({ standard, assignments: stdAssignments }) => {
+                  // Group assignments by subject within each standard
+                  const subjectGrouped = {};
+                  stdAssignments.forEach(assignment => {
+                    const subject = subjects.find(s => s.id === assignment.subjectId);
+                    if (subject) {
+                      const key = subject.subject_name;
+                      if (!subjectGrouped[key]) {
+                        subjectGrouped[key] = {
+                          subject,
+                          entries: []
+                        };
+                      }
+                      subjectGrouped[key].entries.push(assignment);
+                    }
+                  });
+
+                  return (
+                    <div key={standard} className="border border-gray-200 rounded-lg overflow-hidden">
+                      <div className="flex items-center px-5 py-3 bg-gradient-to-r from-green-50 to-emerald-50 border-b border-gray-200">
+                        <div className="flex-shrink-0 h-10 w-10 bg-green-100 rounded-full flex items-center justify-center">
+                          <span className="text-lg font-bold text-green-700">
+                            {standard}
+                          </span>
+                        </div>
+                        <div className="ml-3">
+                          <h5 className="text-lg font-semibold text-gray-900">Standard {standard}</h5>
+                          <p className="text-sm text-gray-600">
+                            {Object.keys(subjectGrouped).length} subjects • {stdAssignments.length} assignments
+                          </p>
+                        </div>
                       </div>
-                      <div className="ml-3">
-                        <h5 className="text-lg font-semibold text-gray-900">Grade {standard}</h5>
-                        <p className="text-sm text-gray-600">{assignments.length} assignments</p>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="bg-gray-50 border-b border-gray-200">
+                              <th className="px-4 py-3 text-left font-semibold text-gray-700">Subject Name</th>
+                              <th className="px-4 py-3 text-center font-semibold text-gray-700">Weekly Periods</th>
+                              <th className="px-4 py-3 text-center font-semibold text-gray-700">Consecutive</th>
+                              <th className="px-4 py-3 text-left font-semibold text-gray-700">Teacher</th>
+                              <th className="px-4 py-3 text-left font-semibold text-gray-700">Class</th>
+                              <th className="px-4 py-3 text-center font-semibold text-gray-700">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {Object.values(subjectGrouped)
+                              .sort((a, b) => a.subject.subject_name.localeCompare(b.subject.subject_name))
+                              .map(({ subject, entries }) =>
+                              entries.map((assignment, idx) => {
+                                const teacher = teachers.find(t => t.id === assignment.teacherId);
+                                return (
+                                  <tr key={assignment.id} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${idx > 0 ? 'bg-gray-50/30' : ''}`}>
+                                    {idx === 0 ? (
+                                      <>
+                                        <td className="px-4 py-3 font-medium text-gray-900" rowSpan={entries.length}>
+                                          {subject.subject_name}
+                                        </td>
+                                        <td className="px-4 py-3 text-center" rowSpan={entries.length}>
+                                          <span className="inline-flex items-center justify-center min-w-[2rem] px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full font-semibold text-xs">
+                                            {subject.weekly_periods}
+                                          </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-center" rowSpan={entries.length}>
+                                          {subject.consecutive_periods ? (
+                                            <span className="inline-flex items-center px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full text-xs font-medium">✓ Yes</span>
+                                          ) : (
+                                            <span className="inline-flex items-center px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-xs font-medium">No</span>
+                                          )}
+                                        </td>
+                                      </>
+                                    ) : null}
+                                    <td className="px-4 py-3 text-gray-800">
+                                      {teacher?.isPrincipal ? '👑 ' : '👨‍🏫 '}{teacher?.name || 'Unknown'}
+                                    </td>
+                                    <td className="px-4 py-3 text-gray-600">
+                                      {assignment.className || `Grade ${assignment.standard}`}
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                      <button
+                                        onClick={() => handleDelete(assignment.id)}
+                                        className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded transition-colors"
+                                        title="Delete assignment"
+                                      >
+                                        🗑️
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })
+                            )}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {assignments.map(assignment => {
-                        const teacher = teachers.find(t => t.id === assignment.teacherId);
-                        const subject = subjects.find(s => s.id === assignment.subjectId);
-                        return (
-                          <div key={assignment.id} className="bg-gray-50 p-3 rounded-lg flex justify-between items-center">
-                            <div>
-                              <p className="font-medium text-gray-900">{teacher?.name}</p>
-                              <p className="text-sm text-gray-600">{subject?.subject_name} • {assignment.className || `Grade ${assignment.standard}`}</p>
-                            </div>
-                            <button
-                              onClick={() => handleDelete(assignment.id)}
-                              className="text-red-600 hover:text-red-800"
-                            >
-                              🗑️
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
