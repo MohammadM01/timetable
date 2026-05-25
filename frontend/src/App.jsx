@@ -17,12 +17,12 @@ import Sidebar from './components/Sidebar';
 const App = () => {
   return (
     <Router>
-      <div className="min-h-screen bg-slate-50">
+      <div className="min-h-screen">
         <Routes>
           <Route path="/login" element={
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 via-purple-600 to-amber-500">
-              <Login />
-            </div>
+              <div className="min-h-screen flex items-center justify-center bg-[radial-gradient(circle_at_20%_10%,rgba(14,165,233,0.45),transparent_32rem),radial-gradient(circle_at_80%_0%,rgba(251,146,60,0.35),transparent_30rem),linear-gradient(135deg,#f8fafc,#ecfeff_48%,#fff7ed)]">
+                <Login />
+              </div>
           } />
           <Route
             path="/*"
@@ -31,8 +31,8 @@ const App = () => {
                 <Sidebar />
                 <div className="flex-1 flex flex-col overflow-hidden">
                   <Navbar />
-                  <main className="flex-1 overflow-y-auto bg-slate-50 p-6">
-                    <div className="container mx-auto">
+                  <main className="app-main-surface">
+                    <div className="mx-auto max-w-[1500px]">
                       <Routes>
                         <Route index element={<Dashboard />} />
                         <Route path="teacher-setup" element={<TeacherSetup />} />

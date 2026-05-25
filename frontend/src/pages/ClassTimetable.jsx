@@ -33,14 +33,14 @@ const ClassTimetable = () => {
   const daysList = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const maxPeriods = 9;
   const subjectThemes = [
-    { wrap: 'from-sky-100 via-cyan-50 to-blue-100 border-sky-200 text-sky-950', chip: 'bg-sky-600/10 text-sky-800', dot: 'bg-sky-500' },
-    { wrap: 'from-emerald-100 via-teal-50 to-green-100 border-emerald-200 text-emerald-950', chip: 'bg-emerald-600/10 text-emerald-800', dot: 'bg-emerald-500' },
-    { wrap: 'from-amber-100 via-orange-50 to-yellow-100 border-amber-200 text-amber-950', chip: 'bg-amber-600/10 text-amber-800', dot: 'bg-amber-500' },
-    { wrap: 'from-rose-100 via-pink-50 to-red-100 border-rose-200 text-rose-950', chip: 'bg-rose-600/10 text-rose-800', dot: 'bg-rose-500' },
-    { wrap: 'from-indigo-100 via-blue-50 to-violet-100 border-indigo-200 text-indigo-950', chip: 'bg-indigo-600/10 text-indigo-800', dot: 'bg-indigo-500' },
-    { wrap: 'from-fuchsia-100 via-purple-50 to-pink-100 border-fuchsia-200 text-fuchsia-950', chip: 'bg-fuchsia-600/10 text-fuchsia-800', dot: 'bg-fuchsia-500' },
-    { wrap: 'from-lime-100 via-green-50 to-emerald-100 border-lime-200 text-lime-950', chip: 'bg-lime-600/10 text-lime-800', dot: 'bg-lime-500' },
-    { wrap: 'from-teal-100 via-cyan-50 to-sky-100 border-teal-200 text-teal-950', chip: 'bg-teal-600/10 text-teal-800', dot: 'bg-teal-500' }
+    { wrap: 'bg-[#E0F2FE] border border-sky-300/40 text-[#0369A1] rounded-3xl hover:scale-[1.03] hover:rotate-1 hover:shadow-md transition-all duration-300', chip: 'bg-[#0369A1]/10 text-[#0369A1]' }, // Sky Blue
+    { wrap: 'bg-[#DCFCE7] border border-emerald-300/40 text-[#15803D] rounded-3xl hover:scale-[1.03] hover:-rotate-1 hover:shadow-md transition-all duration-300', chip: 'bg-[#15803D]/10 text-[#15803D]' }, // Sage Green
+    { wrap: 'bg-[#FFEDD5] border border-amber-300/40 text-[#C2410C] rounded-3xl hover:scale-[1.03] hover:rotate-1 hover:shadow-md transition-all duration-300', chip: 'bg-[#C2410C]/10 text-[#C2410C]' }, // Soft Apricot
+    { wrap: 'bg-[#FFE4E6] border border-rose-300/40 text-[#BE123C] rounded-3xl hover:scale-[1.03] hover:-rotate-1 hover:shadow-md transition-all duration-300', chip: 'bg-[#BE123C]/10 text-[#BE123C]' }, // Blush Pink
+    { wrap: 'bg-[#EEF2FF] border border-indigo-300/40 text-[#4338CA] rounded-3xl hover:scale-[1.03] hover:rotate-1 hover:shadow-md transition-all duration-300', chip: 'bg-[#4338CA]/10 text-[#4338CA]' }, // Periwinkle Indigo
+    { wrap: 'bg-[#F5F3FF] border border-purple-300/40 text-[#6D28D9] rounded-3xl hover:scale-[1.03] hover:-rotate-1 hover:shadow-md transition-all duration-300', chip: 'bg-[#6D28D9]/10 text-[#6D28D9]' }, // Lilac Lavender
+    { wrap: 'bg-[#FEF9C3] border border-yellow-300/40 text-[#713F12] rounded-3xl hover:scale-[1.03] hover:rotate-1 hover:shadow-md transition-all duration-300', chip: 'bg-[#713F12]/10 text-[#713F12]' }, // Butter Yellow
+    { wrap: 'bg-[#F0FDF4] border border-teal-300/40 text-[#115E59] rounded-3xl hover:scale-[1.03] hover:-rotate-1 hover:shadow-md transition-all duration-300', chip: 'bg-[#115E59]/10 text-[#115E59]' } // Mint Teal
   ];
 
   const getSubjectTheme = (subject = 'Coverage') => {
@@ -338,11 +338,11 @@ const ClassTimetable = () => {
       {/* Interactive Grid Card */}
       {timetable && !loading && (
         <div className="overflow-hidden rounded-[2rem] border border-white/70 bg-white/90 shadow-2xl shadow-cyan-100/60 backdrop-blur">
-          <div className="bg-gradient-to-r from-cyan-50 via-white to-orange-50 p-5 border-b border-slate-100 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <span className="inline-flex w-fit rounded-2xl bg-slate-950 px-4 py-2 text-sm font-black text-white shadow-lg shadow-slate-200">
+          <div className="bg-cyan-50/50 p-5 border-b border-slate-100 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <span className="inline-flex w-fit rounded-2xl bg-slate-700 px-4 py-2 text-sm font-semibold text-white shadow-sm">
               Standard {timetable.class.standard} — Division {timetable.class.division}
             </span>
-            <div className="flex flex-wrap gap-4 text-xs font-bold text-slate-600">
+            <div className="flex flex-wrap gap-4 text-xs font-semibold text-slate-600">
               <span className="flex items-center gap-1">
                 <span className="w-2.5 h-2.5 rounded-full bg-orange-400"></span> Manual Override
               </span>
@@ -355,12 +355,12 @@ const ClassTimetable = () => {
           <div className="p-4 md:p-6 overflow-x-auto">
             <table className="w-full min-w-[900px] border-separate border-spacing-2">
               <thead>
-                <tr className="text-slate-800 text-sm font-black text-center">
-                  <th className="p-3 text-left sticky left-0 z-20 rounded-2xl bg-slate-950 text-white shadow-lg">
+                <tr className="text-slate-700 text-sm font-semibold text-center">
+                  <th className="p-3 text-left sticky left-0 z-20 rounded-2xl bg-slate-700 text-white shadow-sm font-semibold">
                     Period
                   </th>
                   {activeDays.map(day => (
-                    <th key={day} className="p-3 text-center rounded-2xl bg-slate-100 font-black shadow-sm">
+                    <th key={day} className="p-3 text-center rounded-2xl bg-slate-100 font-semibold shadow-sm text-slate-700">
                       {day}
                     </th>
                   ))}
@@ -373,7 +373,7 @@ const ClassTimetable = () => {
                   // Render regular period row
                   return (
                     <tr key={periodNum}>
-                      <td className="p-3 whitespace-nowrap text-sm font-black text-slate-700 sticky left-0 z-10 text-left">
+                      <td className="p-3 whitespace-nowrap text-sm font-semibold text-slate-600 sticky left-0 z-10 text-left bg-white rounded-2xl border border-slate-100 shadow-sm">
                         <span className="inline-flex rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200">
                           Period {periodNum}
                         </span>
@@ -402,7 +402,7 @@ const ClassTimetable = () => {
                           <td 
                             key={`${day}-${periodNum}`} 
                             onClick={() => handleOpenEditor(day, periodNum)}
-                            className={`relative cursor-pointer rounded-2xl border bg-gradient-to-br p-3 align-middle shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${theme.wrap} ${
+                            className={`relative cursor-pointer rounded-3xl p-3 align-middle transition-all duration-300 hover:-rotate-1 hover:scale-105 ${theme.wrap} ${
                               hasConflict 
                                 ? 'bg-red-50 ring-2 ring-red-400' 
                                 : isManual 
@@ -424,11 +424,11 @@ const ClassTimetable = () => {
                               <div className="py-2 text-slate-400 text-xs font-semibold tracking-wide uppercase">Free</div>
                             ) : (
                               <div className="space-y-1 py-1">
-                                <div className="font-extrabold text-sm text-slate-800 tracking-tight">{slot.subject}</div>
+                                <div className="font-semibold text-sm text-current tracking-tight">{slot.subject}</div>
                                 {isCoverage && (
-                                  <div className="text-[10px] font-black uppercase tracking-wide text-slate-600">Admin coverage</div>
+                                  <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">Admin coverage</div>
                                 )}
-                                <div className="text-xs font-semibold text-slate-500 bg-slate-100 rounded px-1.5 py-0.5 inline-block">{slot.teacher}</div>
+                                <div className={`text-xs font-medium rounded px-1.5 py-0.5 inline-block ${theme.chip || 'bg-slate-100 text-slate-600'}`}>{slot.teacher}</div>
                                 {hasConflict && (
                                   <div className="text-[10px] text-red-600 font-bold bg-red-100 rounded px-1 py-0.5 mt-1 border border-red-200 shadow-sm animate-pulse">
                                     ⚠️ Conflict

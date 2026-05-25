@@ -42,14 +42,14 @@ const GenerateTimetable = () => {
   };
 
   const subjectThemes = [
-    { wrap: 'from-sky-100 via-cyan-50 to-blue-100 border-sky-200 text-sky-950', chip: 'bg-sky-600/10 text-sky-800', dot: 'bg-sky-500' },
-    { wrap: 'from-emerald-100 via-teal-50 to-green-100 border-emerald-200 text-emerald-950', chip: 'bg-emerald-600/10 text-emerald-800', dot: 'bg-emerald-500' },
-    { wrap: 'from-amber-100 via-orange-50 to-yellow-100 border-amber-200 text-amber-950', chip: 'bg-amber-600/10 text-amber-800', dot: 'bg-amber-500' },
-    { wrap: 'from-rose-100 via-pink-50 to-red-100 border-rose-200 text-rose-950', chip: 'bg-rose-600/10 text-rose-800', dot: 'bg-rose-500' },
-    { wrap: 'from-indigo-100 via-blue-50 to-violet-100 border-indigo-200 text-indigo-950', chip: 'bg-indigo-600/10 text-indigo-800', dot: 'bg-indigo-500' },
-    { wrap: 'from-fuchsia-100 via-purple-50 to-pink-100 border-fuchsia-200 text-fuchsia-950', chip: 'bg-fuchsia-600/10 text-fuchsia-800', dot: 'bg-fuchsia-500' },
-    { wrap: 'from-lime-100 via-green-50 to-emerald-100 border-lime-200 text-lime-950', chip: 'bg-lime-600/10 text-lime-800', dot: 'bg-lime-500' },
-    { wrap: 'from-teal-100 via-cyan-50 to-sky-100 border-teal-200 text-teal-950', chip: 'bg-teal-600/10 text-teal-800', dot: 'bg-teal-500' }
+    { wrap: 'bg-[#E0F2FE] border border-sky-300/40 text-[#0369A1] rounded-3xl hover:scale-[1.03] hover:rotate-1 hover:shadow-md transition-all duration-300', chip: 'bg-[#0369A1]/10 text-[#0369A1]' },
+    { wrap: 'bg-[#DCFCE7] border border-emerald-300/40 text-[#15803D] rounded-3xl hover:scale-[1.03] hover:-rotate-1 hover:shadow-md transition-all duration-300', chip: 'bg-[#15803D]/10 text-[#15803D]' },
+    { wrap: 'bg-[#FFEDD5] border border-amber-300/40 text-[#C2410C] rounded-3xl hover:scale-[1.03] hover:rotate-1 hover:shadow-md transition-all duration-300', chip: 'bg-[#C2410C]/10 text-[#C2410C]' },
+    { wrap: 'bg-[#FFE4E6] border border-rose-300/40 text-[#BE123C] rounded-3xl hover:scale-[1.03] hover:-rotate-1 hover:shadow-md transition-all duration-300', chip: 'bg-[#BE123C]/10 text-[#BE123C]' },
+    { wrap: 'bg-[#EEF2FF] border border-indigo-300/40 text-[#4338CA] rounded-3xl hover:scale-[1.03] hover:rotate-1 hover:shadow-md transition-all duration-300', chip: 'bg-[#4338CA]/10 text-[#4338CA]' },
+    { wrap: 'bg-[#F5F3FF] border border-purple-300/40 text-[#6D28D9] rounded-3xl hover:scale-[1.03] hover:-rotate-1 hover:shadow-md transition-all duration-300', chip: 'bg-[#6D28D9]/10 text-[#6D28D9]' },
+    { wrap: 'bg-[#FEF9C3] border border-yellow-300/40 text-[#713F12] rounded-3xl hover:scale-[1.03] hover:rotate-1 hover:shadow-md transition-all duration-300', chip: 'bg-[#713F12]/10 text-[#713F12]' },
+    { wrap: 'bg-[#F0FDF4] border border-teal-300/40 text-[#115E59] rounded-3xl hover:scale-[1.03] hover:-rotate-1 hover:shadow-md transition-all duration-300', chip: 'bg-[#115E59]/10 text-[#115E59]' }
   ];
 
   const getSubjectTheme = (subject = 'Coverage') => {
@@ -307,16 +307,35 @@ const GenerateTimetable = () => {
   }, {});
 
   return (
-    <div className="p-6">
-      <h2 className="text-3xl font-bold text-purple-600 mb-6">Generate Timetable</h2>
-      <div className="bg-white p-6 rounded-lg shadow-lg space-y-6">
+    <div className="page-shell">
+      <section className="hero-panel">
+        <p className="kicker">Constraint-aware generator</p>
+        <div className="relative z-10 mt-3 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h2 className="text-4xl font-black md:text-5xl">
+              Generate a <span className="gradient-title">no-free-period</span> timetable
+            </h2>
+            <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
+              Uses teacher_periods.xlsx, subject_periods_updated.xlsx, and class_list_corrected.xlsx constraints: max 2 consecutive, required breaks, weekly totals, daily caps, block periods, recess reset, and no double booking.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs md:grid-cols-4 lg:min-w-[520px]">
+            <span className="constraint-chip">Max 2 continuous</span>
+            <span className="constraint-chip" data-tone="green">No double booking</span>
+            <span className="constraint-chip" data-tone="amber">Block periods</span>
+            <span className="constraint-chip" data-tone="rose">No free slots</span>
+          </div>
+        </div>
+      </section>
+
+      <div className="glass-panel space-y-6">
 
         {/* Generation Type Selection */}
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-gray-800">Generation Type</h3>
+          <h3 className="text-lg font-black text-slate-900">Generation Type</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div
-              className={`p-4 border-2 rounded-lg cursor-pointer transition-colors ${generationType === 'all' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+              className={`cursor-pointer rounded-3xl border-2 p-5 text-center transition-all hover:-translate-y-1 hover:shadow-lg ${generationType === 'all' ? 'border-cyan-500 bg-cyan-50' : 'border-slate-200 bg-white/70 hover:border-cyan-200'
                 }`}
               onClick={() => setGenerationType('all')}
             >
@@ -328,7 +347,7 @@ const GenerateTimetable = () => {
             </div>
 
             <div
-              className={`p-4 border-2 rounded-lg cursor-pointer transition-colors ${generationType === 'selected' ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:border-gray-300'
+              className={`cursor-pointer rounded-3xl border-2 p-5 text-center transition-all hover:-translate-y-1 hover:shadow-lg ${generationType === 'selected' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white/70 hover:border-emerald-200'
                 }`}
               onClick={() => setGenerationType('selected')}
             >
@@ -340,7 +359,7 @@ const GenerateTimetable = () => {
             </div>
 
             <div
-              className={`p-4 border-2 rounded-lg cursor-pointer transition-colors ${generationType === 'standard' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-gray-300'
+              className={`cursor-pointer rounded-3xl border-2 p-5 text-center transition-all hover:-translate-y-1 hover:shadow-lg ${generationType === 'standard' ? 'border-fuchsia-500 bg-fuchsia-50' : 'border-slate-200 bg-white/70 hover:border-fuchsia-200'
                 }`}
               onClick={() => setGenerationType('standard')}
             >
@@ -706,8 +725,8 @@ const GenerateTimetable = () => {
               return (
                 <>
                   {/* Class Header */}
-                  <div className="text-center rounded-[2rem] border border-white/70 bg-gradient-to-r from-blue-50 via-white to-cyan-50 p-6 shadow-xl shadow-cyan-100/40 backdrop-blur border-2">
-                    <h3 className="text-2xl font-extrabold bg-gradient-to-r from-cyan-600 to-blue-600 bg-clip-text text-transparent">
+                  <div className="text-center rounded-[2rem] border border-white/70 bg-blue-50/50 p-6 shadow-xl shadow-cyan-100/10 backdrop-blur border-2">
+                    <h3 className="text-2xl font-semibold text-blue-700">
                       {selectedClassTimetable.class.full_name}
                     </h3>
                     <p className="text-slate-500 font-semibold mt-1.5">
@@ -716,9 +735,9 @@ const GenerateTimetable = () => {
                   </div>
 
                   {/* Subject-wise Timetable */}
-                  <div className="overflow-hidden rounded-[2rem] border border-white/70 bg-white/90 shadow-2xl shadow-cyan-100/50 backdrop-blur mt-6">
-                    <div className="bg-gradient-to-r from-cyan-50 via-white to-blue-50 p-5 border-b border-slate-100">
-                      <span className="inline-flex w-fit rounded-2xl bg-cyan-950 px-4 py-2 text-sm font-black text-white shadow-lg">
+                  <div className="overflow-hidden rounded-[2rem] border border-white/70 bg-white/90 shadow-xl shadow-cyan-100/20 backdrop-blur mt-6">
+                    <div className="bg-cyan-50/50 p-5 border-b border-slate-100">
+                      <span className="inline-flex w-fit rounded-2xl bg-cyan-800 px-4 py-2 text-sm font-semibold text-white shadow-sm">
                         📚 Subject-wise Allocation Grid
                       </span>
                     </div>
@@ -726,12 +745,12 @@ const GenerateTimetable = () => {
                     <div className="p-4 md:p-6 overflow-x-auto">
                       <table className="w-full min-w-[800px] border-separate border-spacing-2">
                         <thead>
-                          <tr className="text-slate-800 text-sm font-black text-center">
-                            <th className="p-3 text-left sticky left-0 z-20 rounded-2xl bg-slate-950 text-white shadow-lg">
+                          <tr className="text-slate-700 text-sm font-semibold text-center">
+                            <th className="p-3 text-left sticky left-0 z-20 rounded-2xl bg-slate-700 text-white shadow-sm font-semibold">
                               Subject
                             </th>
                             {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => (
-                              <th key={day} className="p-3 text-center rounded-2xl bg-slate-100 font-black shadow-sm">
+                              <th key={day} className="p-3 text-center rounded-2xl bg-slate-100 font-semibold shadow-sm text-slate-700">
                                 {day}
                               </th>
                             ))}
@@ -742,7 +761,7 @@ const GenerateTimetable = () => {
                             const theme = getSubjectTheme(subject);
                             return (
                               <tr key={subject}>
-                                <td className="p-3 whitespace-nowrap text-sm font-black text-slate-700 sticky left-0 z-10 text-left bg-white rounded-2xl border border-slate-100 shadow-sm">
+                                <td className="p-3 whitespace-nowrap text-sm font-semibold text-slate-600 sticky left-0 z-10 text-left bg-white rounded-2xl border border-slate-100 shadow-sm">
                                   {subject}
                                 </td>
                                 {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => {
@@ -767,11 +786,11 @@ const GenerateTimetable = () => {
                                   }
 
                                   return (
-                                    <td key={`${day}-${subject}`} className={`relative rounded-2xl border bg-gradient-to-br p-3 align-middle shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${theme.wrap}`}>
+                                    <td key={`${day}-${subject}`} className={`relative rounded-3xl p-3 align-middle transition-all duration-300 hover:-rotate-1 hover:scale-105 ${theme.wrap}`}>
                                       <div className="space-y-1 py-1">
-                                        <div className="font-extrabold text-sm text-slate-800 tracking-tight">{periodInfo}</div>
+                                        <div className="font-semibold text-sm text-current tracking-tight">{periodInfo}</div>
                                         {viewType !== 'class' && slotTeacher && (
-                                          <div className="text-xs font-semibold text-slate-500 bg-slate-100/80 rounded px-1.5 py-0.5 inline-block">{slotTeacher}</div>
+                                          <div className={`text-xs font-medium rounded px-1.5 py-0.5 inline-block ${theme.chip || 'bg-slate-100 text-slate-600'}`}>{slotTeacher}</div>
                                         )}
                                       </div>
                                     </td>
@@ -783,12 +802,10 @@ const GenerateTimetable = () => {
                         </tbody>
                       </table>
                     </div>
-                  </div>
-
-                  {/* Period-wise Timetable (Alternative view) */}
-                  <div className="overflow-hidden rounded-[2rem] border border-white/70 bg-white/90 shadow-2xl shadow-cyan-100/50 backdrop-blur mt-8">
-                    <div className="bg-gradient-to-r from-cyan-50 via-white to-blue-50 p-5 border-b border-slate-100">
-                      <span className="inline-flex w-fit rounded-2xl bg-slate-950 px-4 py-2 text-sm font-black text-white shadow-lg">
+                       {/* Period-wise Timetable (Alternative view) */}
+                  <div className="overflow-hidden rounded-[2rem] border border-white/70 bg-white/90 shadow-xl shadow-cyan-100/20 backdrop-blur mt-8">
+                    <div className="bg-cyan-50/50 p-5 border-b border-slate-100">
+                      <span className="inline-flex w-fit rounded-2xl bg-slate-700 px-4 py-2 text-sm font-semibold text-white shadow-sm">
                         📅 Period-wise Daily Schedule
                       </span>
                     </div>
@@ -796,12 +813,12 @@ const GenerateTimetable = () => {
                     <div className="p-4 md:p-6 overflow-x-auto">
                       <table className="w-full min-w-[800px] border-separate border-spacing-2">
                         <thead>
-                          <tr className="text-slate-800 text-sm font-black text-center">
-                            <th className="p-3 text-left sticky left-0 z-20 rounded-2xl bg-slate-950 text-white shadow-lg">
+                          <tr className="text-slate-700 text-sm font-semibold text-center">
+                            <th className="p-3 text-left sticky left-0 z-20 rounded-2xl bg-slate-700 text-white shadow-sm font-semibold">
                               Period
                             </th>
                             {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => (
-                              <th key={day} className="p-3 text-center rounded-2xl bg-slate-100 font-black shadow-sm">
+                              <th key={day} className="p-3 text-center rounded-2xl bg-slate-100 font-semibold shadow-sm text-slate-700">
                                 {day}
                               </th>
                             ))}
@@ -814,7 +831,7 @@ const GenerateTimetable = () => {
 
                             const rows = [
                               <tr key={period}>
-                                <td className="p-3 whitespace-nowrap text-sm font-black text-slate-700 sticky left-0 z-10 text-left bg-white rounded-2xl border border-slate-100 shadow-sm">
+                                <td className="p-3 whitespace-nowrap text-sm font-semibold text-slate-600 sticky left-0 z-10 text-left bg-white rounded-2xl border border-slate-100 shadow-sm">
                                   Period {period}
                                 </td>
                                 {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => {
@@ -833,14 +850,14 @@ const GenerateTimetable = () => {
                                   const theme = getSubjectTheme(slot.subject);
 
                                   return (
-                                    <td key={`${day}-${period}`} className={`relative rounded-2xl border bg-gradient-to-br p-3 align-middle shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${theme.wrap}`}>
+                                    <td key={`${day}-${period}`} className={`relative rounded-3xl p-3 align-middle transition-all duration-300 hover:-rotate-1 hover:scale-105 ${theme.wrap}`}>
                                       <div className="space-y-1 py-1">
-                                        <div className="font-extrabold text-sm text-slate-800 tracking-tight">{slot.subject}</div>
+                                        <div className="font-semibold text-sm text-current tracking-tight">{slot.subject}</div>
                                         {isCoverage && (
-                                          <div className="text-[10px] font-black uppercase tracking-wide text-slate-600">Admin coverage</div>
+                                          <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">Admin coverage</div>
                                         )}
                                         {viewType !== 'class' && slot.teacher && (
-                                          <div className="text-xs font-semibold text-slate-500 bg-slate-100/80 rounded px-1.5 py-0.5 inline-block">{slot.teacher}</div>
+                                          <div className={`text-xs font-medium rounded px-1.5 py-0.5 inline-block ${theme.chip || 'bg-slate-100 text-slate-600'}`}>{slot.teacher}</div>
                                         )}
                                       </div>
                                     </td>
@@ -852,7 +869,7 @@ const GenerateTimetable = () => {
                             if (showRecess) {
                               rows.push(
                                 <tr key="recess">
-                                  <td className="p-3 whitespace-nowrap text-sm font-black text-amber-800 sticky left-0 z-10 text-left bg-amber-50 rounded-2xl border border-amber-100 shadow-sm">
+                                  <td className="p-3 whitespace-nowrap text-sm font-semibold text-amber-800 sticky left-0 z-10 text-left bg-amber-50/80 rounded-2xl border border-amber-100/60 shadow-sm">
                                     Recess
                                   </td>
                                   {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => {
@@ -865,7 +882,7 @@ const GenerateTimetable = () => {
                                       );
                                     }
                                     return (
-                                      <td key={`${day}-recess`} className="p-3 rounded-2xl bg-gradient-to-r from-amber-100 via-amber-50 to-orange-100 border border-amber-200 text-center align-middle font-black text-amber-800 uppercase tracking-widest text-xs shadow-sm animate-pulse">
+                                      <td key={`${day}-recess`} className="p-3 rounded-2xl bg-amber-100/80 border border-amber-200 text-center align-middle font-semibold text-amber-800 uppercase tracking-widest text-xs shadow-sm animate-pulse">
                                         RECESS Break
                                       </td>
                                     );
@@ -879,6 +896,7 @@ const GenerateTimetable = () => {
                         </tbody>
                       </table>
                     </div>
+                  </div>
                   </div>
                 </>
               );

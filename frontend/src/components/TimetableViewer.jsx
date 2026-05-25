@@ -7,14 +7,14 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Calendar, Users, BookOpen, Eye, Download } from 'lucide-react';
 
 const subjectThemes = [
-  { wrap: 'from-sky-100 via-cyan-50 to-blue-100 border-sky-200 text-sky-950', chip: 'bg-sky-600/10 text-sky-800', dot: 'bg-sky-500' },
-  { wrap: 'from-emerald-100 via-teal-50 to-green-100 border-emerald-200 text-emerald-950', chip: 'bg-emerald-600/10 text-emerald-800', dot: 'bg-emerald-500' },
-  { wrap: 'from-amber-100 via-orange-50 to-yellow-100 border-amber-200 text-amber-950', chip: 'bg-amber-600/10 text-amber-800', dot: 'bg-amber-500' },
-  { wrap: 'from-rose-100 via-pink-50 to-red-100 border-rose-200 text-rose-950', chip: 'bg-rose-600/10 text-rose-800', dot: 'bg-rose-500' },
-  { wrap: 'from-indigo-100 via-blue-50 to-violet-100 border-indigo-200 text-indigo-950', chip: 'bg-indigo-600/10 text-indigo-800', dot: 'bg-indigo-500' },
-  { wrap: 'from-fuchsia-100 via-purple-50 to-pink-100 border-fuchsia-200 text-fuchsia-950', chip: 'bg-fuchsia-600/10 text-fuchsia-800', dot: 'bg-fuchsia-500' },
-  { wrap: 'from-lime-100 via-green-50 to-emerald-100 border-lime-200 text-lime-950', chip: 'bg-lime-600/10 text-lime-800', dot: 'bg-lime-500' },
-  { wrap: 'from-teal-100 via-cyan-50 to-sky-100 border-teal-200 text-teal-950', chip: 'bg-teal-600/10 text-teal-800', dot: 'bg-teal-500' }
+  { wrap: 'bg-[#E0F2FE] border border-sky-300/40 text-[#0369A1] rounded-3xl hover:scale-[1.03] hover:rotate-1 hover:shadow-md transition-all duration-300', chip: 'bg-[#0369A1]/10 text-[#0369A1]' },
+  { wrap: 'bg-[#DCFCE7] border border-emerald-300/40 text-[#15803D] rounded-3xl hover:scale-[1.03] hover:-rotate-1 hover:shadow-md transition-all duration-300', chip: 'bg-[#15803D]/10 text-[#15803D]' },
+  { wrap: 'bg-[#FFEDD5] border border-amber-300/40 text-[#C2410C] rounded-3xl hover:scale-[1.03] hover:rotate-1 hover:shadow-md transition-all duration-300', chip: 'bg-[#C2410C]/10 text-[#C2410C]' },
+  { wrap: 'bg-[#FFE4E6] border border-rose-300/40 text-[#BE123C] rounded-3xl hover:scale-[1.03] hover:-rotate-1 hover:shadow-md transition-all duration-300', chip: 'bg-[#BE123C]/10 text-[#BE123C]' },
+  { wrap: 'bg-[#EEF2FF] border border-indigo-300/40 text-[#4338CA] rounded-3xl hover:scale-[1.03] hover:rotate-1 hover:shadow-md transition-all duration-300', chip: 'bg-[#4338CA]/10 text-[#4338CA]' },
+  { wrap: 'bg-[#F5F3FF] border border-purple-300/40 text-[#6D28D9] rounded-3xl hover:scale-[1.03] hover:-rotate-1 hover:shadow-md transition-all duration-300', chip: 'bg-[#6D28D9]/10 text-[#6D28D9]' },
+  { wrap: 'bg-[#FEF9C3] border border-yellow-300/40 text-[#713F12] rounded-3xl hover:scale-[1.03] hover:rotate-1 hover:shadow-md transition-all duration-300', chip: 'bg-[#713F12]/10 text-[#713F12]' },
+  { wrap: 'bg-[#F0FDF4] border border-teal-300/40 text-[#115E59] rounded-3xl hover:scale-[1.03] hover:-rotate-1 hover:shadow-md transition-all duration-300', chip: 'bg-[#115E59]/10 text-[#115E59]' }
 ];
 
 const getSubjectTheme = (subject = 'Coverage') => {
@@ -140,12 +140,12 @@ const TimetableViewer = () => {
         <div className="p-4 md:p-6 overflow-x-auto">
           <table className="w-full min-w-[800px] border-separate border-spacing-2">
             <thead>
-              <tr className="text-slate-800 text-sm font-black text-center">
-                <th className="p-3 text-left sticky left-0 z-20 rounded-2xl bg-slate-950 text-white shadow-lg">
+              <tr className="text-slate-700 text-sm font-semibold text-center">
+                <th className="p-3 text-left sticky left-0 z-20 rounded-2xl bg-slate-700 text-white shadow-sm font-semibold">
                   Day / Period
                 </th>
                 {periodNames.map(period => (
-                  <th key={period} className="p-3 text-center rounded-2xl bg-slate-100 font-black shadow-sm">
+                  <th key={period} className="p-3 text-center rounded-2xl bg-slate-100 font-semibold shadow-sm text-slate-700">
                     {period}
                   </th>
                 ))}
@@ -154,7 +154,7 @@ const TimetableViewer = () => {
             <tbody className="text-center">
               {dayNames.map(day => (
                 <tr key={day}>
-                  <td className="p-3 whitespace-nowrap text-sm font-black text-slate-700 sticky left-0 z-10 text-left bg-white rounded-2xl border border-slate-100 shadow-sm">
+                  <td className="p-3 whitespace-nowrap text-sm font-semibold text-slate-600 sticky left-0 z-10 text-left bg-white rounded-2xl border border-slate-100 shadow-sm">
                     {day}
                   </td>
                   {periodNames.map(period => {
@@ -163,7 +163,7 @@ const TimetableViewer = () => {
                     
                     if (isFree) {
                       return (
-                        <td key={period} className="p-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 text-slate-400 font-bold select-none text-center align-middle">
+                        <td key={period} className="p-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 text-slate-400 font-medium select-none text-center align-middle">
                           <div className="py-2 text-slate-400 text-xs font-semibold tracking-wide uppercase">Free</div>
                         </td>
                       );
@@ -173,13 +173,13 @@ const TimetableViewer = () => {
                     const theme = getSubjectTheme(slot.subject);
 
                     return (
-                      <td key={period} className={`relative rounded-2xl border bg-gradient-to-br p-3 align-middle shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${theme.wrap}`}>
+                      <td key={period} className={`relative rounded-3xl p-3 align-middle transition-all duration-300 hover:-rotate-1 hover:scale-105 ${theme.wrap}`}>
                         <div className="space-y-1 py-1">
-                          <div className="font-extrabold text-sm text-slate-800 tracking-tight">{slot.subject}</div>
+                          <div className="font-semibold text-sm text-current tracking-tight">{slot.subject}</div>
                           {isCoverage && (
-                            <div className="text-[10px] font-black uppercase tracking-wide text-slate-600">Admin coverage</div>
+                            <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">Admin coverage</div>
                           )}
-                          <div className="text-xs font-semibold text-slate-500 bg-slate-100/80 rounded px-1.5 py-0.5 inline-block">
+                          <div className={`text-xs font-medium rounded px-1.5 py-0.5 inline-block ${theme.chip || 'bg-slate-100 text-slate-600'}`}>
                             {slot.teacher || slot.className}
                           </div>
                         </div>
@@ -204,9 +204,9 @@ const TimetableViewer = () => {
     return (
       <div className="space-y-6">
         {dayNames.map(day => (
-          <div key={day} className="overflow-hidden rounded-[2rem] border border-white/70 bg-white/90 shadow-2xl shadow-purple-100/40 backdrop-blur">
-            <div className="bg-gradient-to-r from-purple-50 via-white to-indigo-50 px-6 py-4 border-b border-purple-100">
-              <h3 className="text-lg font-extrabold bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent flex items-center gap-2">
+          <div key={day} className="overflow-hidden rounded-[2rem] border border-white/70 bg-white/90 shadow-xl shadow-purple-100/20 backdrop-blur">
+            <div className="bg-purple-50/50 px-6 py-4 border-b border-purple-100/50">
+              <h3 className="text-lg font-semibold text-purple-700 flex items-center gap-2">
                 <span>📅</span> {day} Schedule
               </h3>
             </div>
@@ -214,12 +214,12 @@ const TimetableViewer = () => {
             <div className="p-4 md:p-6 overflow-x-auto">
               <table className="w-full min-w-[800px] border-separate border-spacing-2">
                 <thead>
-                  <tr className="text-slate-800 text-sm font-black text-center">
-                    <th className="p-3 text-left sticky left-0 z-20 rounded-2xl bg-slate-950 text-white shadow-lg">
+                  <tr className="text-slate-700 text-sm font-semibold text-center">
+                    <th className="p-3 text-left sticky left-0 z-20 rounded-2xl bg-slate-700 text-white shadow-sm font-semibold">
                       Class / Period
                     </th>
                     {periodNames.map(period => (
-                      <th key={period} className="p-3 text-center rounded-2xl bg-slate-100 font-black shadow-sm">
+                      <th key={period} className="p-3 text-center rounded-2xl bg-slate-100 font-semibold shadow-sm text-slate-700">
                         {period}
                       </th>
                     ))}
@@ -228,7 +228,7 @@ const TimetableViewer = () => {
                 <tbody className="text-center">
                   {classNames.map(className => (
                     <tr key={className}>
-                      <td className="p-3 whitespace-nowrap text-sm font-black text-slate-700 sticky left-0 z-10 text-left bg-white rounded-2xl border border-slate-100 shadow-sm">
+                      <td className="p-3 whitespace-nowrap text-sm font-semibold text-slate-600 sticky left-0 z-10 text-left bg-white rounded-2xl border border-slate-100 shadow-sm">
                         {className}
                       </td>
                       {periodNames.map(period => {
@@ -237,7 +237,7 @@ const TimetableViewer = () => {
                         
                         if (isFree) {
                           return (
-                            <td key={period} className="p-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 text-slate-400 font-bold select-none text-center align-middle">
+                            <td key={period} className="p-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 text-slate-400 font-medium select-none text-center align-middle">
                               <div className="py-2 text-slate-400 text-xs font-semibold tracking-wide uppercase">Free</div>
                             </td>
                           );
@@ -247,13 +247,13 @@ const TimetableViewer = () => {
                         const theme = getSubjectTheme(slot.subject);
 
                         return (
-                          <td key={period} className={`relative rounded-2xl border bg-gradient-to-br p-3 align-middle shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${theme.wrap}`}>
+                          <td key={period} className={`relative rounded-3xl p-3 align-middle transition-all duration-300 hover:-rotate-1 hover:scale-105 ${theme.wrap}`}>
                             <div className="space-y-1 py-1">
-                              <div className="font-extrabold text-sm text-slate-800 tracking-tight">{slot.subject}</div>
+                              <div className="font-semibold text-sm text-current tracking-tight">{slot.subject}</div>
                               {isCoverage && (
-                                <div className="text-[10px] font-black uppercase tracking-wide text-slate-600">Admin coverage</div>
+                                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">Admin coverage</div>
                               )}
-                              <div className="text-xs font-semibold text-slate-500 bg-slate-100/80 rounded px-1.5 py-0.5 inline-block">
+                              <div className={`text-xs font-medium rounded px-1.5 py-0.5 inline-block ${theme.chip || 'bg-slate-100 text-slate-600'}`}>
                                 {slot.teacher}
                               </div>
                             </div>

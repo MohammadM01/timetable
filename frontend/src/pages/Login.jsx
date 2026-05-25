@@ -21,7 +21,7 @@ const Login = () => {
       } else {
         setError("Invalid credentials. Please try again.");
       }
-    } catch (err) {
+    } catch {
       setError("Unable to connect to the server. Please try again later.");
     } finally {
       setIsLoading(false);
@@ -29,20 +29,43 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary via-secondary to-accent p-4">
-      <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-          <div className="px-8 pt-8 pb-6">
+    <div className="relative min-h-screen w-full overflow-hidden p-4">
+      <div className="absolute left-10 top-10 h-44 w-44 rounded-full bg-cyan-300/30 blur-3xl"></div>
+      <div className="absolute bottom-10 right-10 h-56 w-56 rounded-full bg-orange-300/30 blur-3xl"></div>
+      <div className="mx-auto grid min-h-screen max-w-6xl items-center gap-8 lg:grid-cols-[1.05fr_0.95fr]">
+        <div className="hidden lg:block">
+          <p className="kicker">Scholara timetable</p>
+          <h1 className="mt-4 text-6xl font-black leading-tight">
+            The white-glass command center for <span className="gradient-title">perfect schedules.</span>
+          </h1>
+          <p className="mt-5 max-w-xl text-lg font-semibold leading-8 text-slate-600">
+            Enforce teacher limits, recess breaks, block periods, subject totals, and no free class periods from one polished workspace.
+          </p>
+          <div className="mt-8 grid max-w-xl grid-cols-2 gap-3">
+            {["Max 2 consecutive", "Daily/weekly caps", "No double booking", "No free periods"].map((item) => (
+              <div key={item} className="rounded-3xl border border-white/70 bg-white/70 px-4 py-3 text-sm font-black text-slate-700 shadow-lg shadow-slate-100/70 backdrop-blur">
+                {item}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="w-full max-w-md justify-self-center">
+          <div className="overflow-hidden rounded-[2rem] border border-white/75 bg-white/82 shadow-2xl shadow-cyan-100/70 backdrop-blur-2xl">
+            <div className="px-8 pt-8 pb-6">
             <div className="text-center mb-8">
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent mb-2">
+              <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-3xl bg-gradient-to-br from-cyan-500 to-blue-600 text-xl font-black text-white shadow-xl shadow-cyan-200">
+                T
+              </div>
+              <h1 className="text-3xl font-black gradient-title mb-2">
                 TimetableMaster
               </h1>
-              <p className="text-gray-600">Welcome back! Please login to continue.</p>
+              <p className="text-sm font-semibold text-slate-500">Welcome back. Your constraint engine is ready.</p>
             </div>
             
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="mb-2 block text-sm font-black text-slate-700">
                   Username
                 </label>
                 <div className="relative">
@@ -64,7 +87,7 @@ const Login = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="mb-2 block text-sm font-black text-slate-700">
                   Password
                 </label>
                 <div className="relative">
@@ -86,7 +109,7 @@ const Login = () => {
               </div>
 
               {error && (
-                <div className="bg-red-50 border-l-4 border-red-400 p-4 rounded">
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
                   <div className="flex">
                     <div className="flex-shrink-0">
                       <svg className="h-5 w-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -94,7 +117,7 @@ const Login = () => {
                       </svg>
                     </div>
                     <div className="ml-3">
-                      <p className="text-sm text-red-700">{error}</p>
+                      <p className="text-sm font-bold text-rose-700">{error}</p>
                     </div>
                   </div>
                 </div>
@@ -122,11 +145,12 @@ const Login = () => {
             </form>
           </div>
           
-          <div className="px-8 py-4 bg-gray-50 border-t border-gray-100">
-            <p className="text-xs text-center text-gray-600">
+          <div className="border-t border-white/70 bg-slate-50/70 px-8 py-4">
+            <p className="text-center text-xs font-bold text-slate-500">
               Protected by industry standard encryption
             </p>
           </div>
+        </div>
         </div>
       </div>
     </div>
