@@ -312,6 +312,7 @@ h2,
 h3,
 h4,
 .section-title,
+/* Main heading color for right side headings */
 .gradient-title,
 .text-purple-600,
 .text-purple-700,
@@ -322,5 +323,5 @@ h4,
 .hero-panel h2,
 .glass-panel h3,
 main h2 {
-  color: #800000 !important;
+  color: #334155 !important;
 }

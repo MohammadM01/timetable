@@ -186,7 +186,7 @@ const ClassSetup = () => {
 
   return (
     <div className="p-6 space-y-8">
-      <h2 className="text-3xl font-bold text-purple-600 mb-6">Class Setup</h2>
+      <h2 className="text-3xl font-bold mb-6" style={{ color: '#334155' }}>Class Setup</h2>
       
       {/* Excel Upload Section */}
       <div className="bg-white p-6 rounded-lg shadow-lg mb-6">
