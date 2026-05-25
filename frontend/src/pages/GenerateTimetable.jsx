@@ -29,6 +29,34 @@ const GenerateTimetable = () => {
     }
   });
 
+  const getDisplaySlot = (slot) => {
+    if (!slot || slot.subject === 'Free') {
+      return {
+        subject: 'Supervised Study',
+        teacher: 'Admin Coverage',
+        teacherId: null,
+        isCoverageFallback: true
+      };
+    }
+    return slot;
+  };
+
+  const subjectThemes = [
+    { wrap: 'from-sky-100 via-cyan-50 to-blue-100 border-sky-200 text-sky-950', chip: 'bg-sky-600/10 text-sky-800', dot: 'bg-sky-500' },
+    { wrap: 'from-emerald-100 via-teal-50 to-green-100 border-emerald-200 text-emerald-950', chip: 'bg-emerald-600/10 text-emerald-800', dot: 'bg-emerald-500' },
+    { wrap: 'from-amber-100 via-orange-50 to-yellow-100 border-amber-200 text-amber-950', chip: 'bg-amber-600/10 text-amber-800', dot: 'bg-amber-500' },
+    { wrap: 'from-rose-100 via-pink-50 to-red-100 border-rose-200 text-rose-950', chip: 'bg-rose-600/10 text-rose-800', dot: 'bg-rose-500' },
+    { wrap: 'from-indigo-100 via-blue-50 to-violet-100 border-indigo-200 text-indigo-950', chip: 'bg-indigo-600/10 text-indigo-800', dot: 'bg-indigo-500' },
+    { wrap: 'from-fuchsia-100 via-purple-50 to-pink-100 border-fuchsia-200 text-fuchsia-950', chip: 'bg-fuchsia-600/10 text-fuchsia-800', dot: 'bg-fuchsia-500' },
+    { wrap: 'from-lime-100 via-green-50 to-emerald-100 border-lime-200 text-lime-950', chip: 'bg-lime-600/10 text-lime-800', dot: 'bg-lime-500' },
+    { wrap: 'from-teal-100 via-cyan-50 to-sky-100 border-teal-200 text-teal-950', chip: 'bg-teal-600/10 text-teal-800', dot: 'bg-teal-500' }
+  ];
+
+  const getSubjectTheme = (subject = 'Coverage') => {
+    const hash = subject.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+    return subjectThemes[hash % subjectThemes.length];
+  };
+
   // Load classes and latest timetable on component mount
   useEffect(() => {
     fetchAvailableClasses();
@@ -39,7 +67,7 @@ const GenerateTimetable = () => {
     try {
       const data = await getAvailableClasses();
       setClasses(data);
-    } catch (err) {
+    } catch {
       setError('Failed to fetch available classes');
     }
   };
@@ -138,11 +166,7 @@ const GenerateTimetable = () => {
               const classData = classes.find(c => c.id === classId);
               if (classData) {
                 const slot = data.timetable[classId]?.[dayIndex + 1]?.[period];
-                overview[day][`Period ${period}`][classData.full_name] = slot || {
-                  subject: 'Free',
-                  teacher: 'Free',
-                  teacherId: null
-                };
+                overview[day][`Period ${period}`][classData.full_name] = getDisplaySlot(slot);
               }
             });
           }
@@ -190,8 +214,8 @@ const GenerateTimetable = () => {
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
     days.forEach(day => {
       for (let period = 1; period <= config.periodsPerDay; period++) {
-        const slot = selectedClassTimetable.timetable[day][period];
-        csvContent += `${day},${period},${slot?.subject || 'Free'},${slot?.teacher || 'Free'}\n`;
+        const slot = getDisplaySlot(selectedClassTimetable.timetable[day][period]);
+        csvContent += `${day},${period},${slot.subject},${slot.teacher}\n`;
       }
     });
 
@@ -223,13 +247,6 @@ const GenerateTimetable = () => {
     }
   };
 
-  // Function to get cell content for timetable display
-  const getCellContent = (dayName, periodName, className) => {
-    if (!timetable?.overview?.[dayName]?.[periodName]?.[className]) return 'Free';
-    const slot = timetable.overview[dayName][periodName][className];
-    return `${slot.subject}\n${slot.teacher}`;
-  };
-
   // Function to get selected class timetable data
   const getSelectedClassTimetable = () => {
     if (!timetable || !selectedClasses.length) return null;
@@ -250,7 +267,7 @@ const GenerateTimetable = () => {
         const periodName = `Period ${period}`;
         const slot = timetable.overview?.[day]?.[periodName]?.[selectedClassData.full_name];
         console.log(`Slot for ${day} ${periodName} ${selectedClassData.full_name}:`, slot);
-        classTimetable[day][period] = slot || { subject: 'Free', teacher: 'Free' };
+        classTimetable[day][period] = getDisplaySlot(slot);
       }
     });
 
@@ -576,7 +593,7 @@ const GenerateTimetable = () => {
                       </h4>
                       <p className="text-sm mb-3">
                         Your subjects require more weekly periods than the current school configuration provides. 
-                        The algorithm had to leave some periods unassigned because there are physically not enough hours in the school week.
+                        The final pass fills every class slot; if teacher capacity runs out, those periods become supervised admin coverage.
                       </p>
                       
                       <div className="space-y-2 bg-white/70 p-3 rounded-lg border border-red-100 text-xs">
@@ -616,7 +633,7 @@ const GenerateTimetable = () => {
                     <span className="text-xl mr-2">⚠️</span>
                     <div>
                       <h4 className="font-bold mb-1">Detailed Allocation Warnings:</h4>
-                      <p className="text-xs text-yellow-700 mb-2">The following periods could not find free slots because the classes' daily schedules were already fully booked by other subjects:</p>
+                      <p className="text-xs text-yellow-700 mb-2">The following allocation warnings were resolved as far as possible by the final fill pass:</p>
                       <ul className="list-disc list-inside space-y-1 text-sm">
                         {otherWarnings.slice(0, 5).map((w, idx) => (
                           <li key={idx}>{w}</li>
@@ -689,147 +706,178 @@ const GenerateTimetable = () => {
               return (
                 <>
                   {/* Class Header */}
-                  <div className="text-center bg-blue-50 p-4 rounded-lg border-2 border-blue-200">
-                    <h3 className="text-2xl font-bold text-blue-800">
+                  <div className="text-center rounded-[2rem] border border-white/70 bg-gradient-to-r from-blue-50 via-white to-cyan-50 p-6 shadow-xl shadow-cyan-100/40 backdrop-blur border-2">
+                    <h3 className="text-2xl font-extrabold bg-gradient-to-r from-cyan-600 to-blue-600 bg-clip-text text-transparent">
                       {selectedClassTimetable.class.full_name}
                     </h3>
-                    <p className="text-blue-600 mt-1">
+                    <p className="text-slate-500 font-semibold mt-1.5">
                       Standard: {selectedClassTimetable.class.standard} | Division: {selectedClassTimetable.class.division}
                     </p>
                   </div>
 
                   {/* Subject-wise Timetable */}
-                  <div className="overflow-x-auto">
-                    <div className="inline-block min-w-full align-middle">
-                      <div className="overflow-hidden border border-gray-200 rounded-lg">
-                        <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-gray-50">
-                            <tr>
-                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-500 uppercase tracking-wider">
-                                Subject
+                  <div className="overflow-hidden rounded-[2rem] border border-white/70 bg-white/90 shadow-2xl shadow-cyan-100/50 backdrop-blur mt-6">
+                    <div className="bg-gradient-to-r from-cyan-50 via-white to-blue-50 p-5 border-b border-slate-100">
+                      <span className="inline-flex w-fit rounded-2xl bg-cyan-950 px-4 py-2 text-sm font-black text-white shadow-lg">
+                        📚 Subject-wise Allocation Grid
+                      </span>
+                    </div>
+                    
+                    <div className="p-4 md:p-6 overflow-x-auto">
+                      <table className="w-full min-w-[800px] border-separate border-spacing-2">
+                        <thead>
+                          <tr className="text-slate-800 text-sm font-black text-center">
+                            <th className="p-3 text-left sticky left-0 z-20 rounded-2xl bg-slate-950 text-white shadow-lg">
+                              Subject
+                            </th>
+                            {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => (
+                              <th key={day} className="p-3 text-center rounded-2xl bg-slate-100 font-black shadow-sm">
+                                {day}
                               </th>
-                              {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => (
-                                <th key={day} className="px-4 py-3 text-center text-sm font-medium text-gray-500 uppercase tracking-wider border-l">
-                                  {day}
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
-                            {classSubjects.map((subject, idx) => (
-                              <tr key={subject} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="text-center">
+                          {classSubjects.map((subject) => {
+                            const theme = getSubjectTheme(subject);
+                            return (
+                              <tr key={subject}>
+                                <td className="p-3 whitespace-nowrap text-sm font-black text-slate-700 sticky left-0 z-10 text-left bg-white rounded-2xl border border-slate-100 shadow-sm">
                                   {subject}
                                 </td>
                                 {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => {
                                   // Find which period this subject is taught on this day
                                   let periodInfo = '';
+                                  let slotTeacher = '';
                                   for (let period = 1; period <= config.periodsPerDay; period++) {
                                     const slot = selectedClassTimetable.timetable[day][period];
-                                    if (slot.subject === subject) {
-                                      periodInfo = viewType === 'class' ? `Period ${period}` : `Period ${period}\n${slot.teacher}`;
+                                    if (slot && slot.subject === subject) {
+                                      periodInfo = `Period ${period}`;
+                                      slotTeacher = slot.teacher;
                                       break;
                                     }
                                   }
 
+                                  if (!periodInfo) {
+                                    return (
+                                      <td key={`${day}-${subject}`} className="p-3 rounded-2xl bg-slate-50/50 text-slate-400 select-none text-center align-middle border border-slate-100">
+                                        -
+                                      </td>
+                                    );
+                                  }
+
                                   return (
-                                    <td key={`${day}-${subject}`} className="px-4 py-3 text-center text-sm border-l whitespace-pre-line">
-                                      {periodInfo || '-'}
+                                    <td key={`${day}-${subject}`} className={`relative rounded-2xl border bg-gradient-to-br p-3 align-middle shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${theme.wrap}`}>
+                                      <div className="space-y-1 py-1">
+                                        <div className="font-extrabold text-sm text-slate-800 tracking-tight">{periodInfo}</div>
+                                        {viewType !== 'class' && slotTeacher && (
+                                          <div className="text-xs font-semibold text-slate-500 bg-slate-100/80 rounded px-1.5 py-0.5 inline-block">{slotTeacher}</div>
+                                        )}
+                                      </div>
                                     </td>
                                   );
                                 })}
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
 
                   {/* Period-wise Timetable (Alternative view) */}
-                  <div className="mt-8">
-                    <h4 className="text-lg font-semibold text-gray-800 mb-4 text-center">
-                      Period-wise Schedule
-                    </h4>
-                    <div className="overflow-x-auto">
-                      <div className="inline-block min-w-full align-middle">
-                        <div className="overflow-hidden border border-gray-200 rounded-lg">
-                          <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                              <tr>
-                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  Period
-                                </th>
-                                {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => (
-                                  <th key={day} className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-l">
-                                    {day}
-                                  </th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                              {Array.from({ length: config.periodsPerDay }, (_, periodIndex) => {
-                                const period = periodIndex + 1;
-                                const showRecess = period === config.recessAfterPeriod;
+                  <div className="overflow-hidden rounded-[2rem] border border-white/70 bg-white/90 shadow-2xl shadow-cyan-100/50 backdrop-blur mt-8">
+                    <div className="bg-gradient-to-r from-cyan-50 via-white to-blue-50 p-5 border-b border-slate-100">
+                      <span className="inline-flex w-fit rounded-2xl bg-slate-950 px-4 py-2 text-sm font-black text-white shadow-lg">
+                        📅 Period-wise Daily Schedule
+                      </span>
+                    </div>
 
-                                const rows = [
-                                  <tr key={period} className={periodIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                    <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
-                                      {`Period ${period}`}
+                    <div className="p-4 md:p-6 overflow-x-auto">
+                      <table className="w-full min-w-[800px] border-separate border-spacing-2">
+                        <thead>
+                          <tr className="text-slate-800 text-sm font-black text-center">
+                            <th className="p-3 text-left sticky left-0 z-20 rounded-2xl bg-slate-950 text-white shadow-lg">
+                              Period
+                            </th>
+                            {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => (
+                              <th key={day} className="p-3 text-center rounded-2xl bg-slate-100 font-black shadow-sm">
+                                {day}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="text-center">
+                          {Array.from({ length: config.periodsPerDay }, (_, periodIndex) => {
+                            const period = periodIndex + 1;
+                            const showRecess = period === config.recessAfterPeriod;
+
+                            const rows = [
+                              <tr key={period}>
+                                <td className="p-3 whitespace-nowrap text-sm font-black text-slate-700 sticky left-0 z-10 text-left bg-white rounded-2xl border border-slate-100 shadow-sm">
+                                  Period {period}
+                                </td>
+                                {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => {
+                                  const dayPeriodsCount = config.dayPeriods?.[day] ?? config.periodsPerDay;
+                                  if (period > dayPeriodsCount) {
+                                    return (
+                                      <td key={`${day}-${period}`} className="p-3 rounded-2xl bg-slate-100 text-slate-400 select-none cursor-not-allowed align-middle text-center">
+                                        -
+                                      </td>
+                                    );
+                                  }
+
+                                  const rawSlot = selectedClassTimetable.timetable[day][period];
+                                  const slot = getDisplaySlot(rawSlot);
+                                  const isCoverage = slot.isCoverageFallback;
+                                  const theme = getSubjectTheme(slot.subject);
+
+                                  return (
+                                    <td key={`${day}-${period}`} className={`relative rounded-2xl border bg-gradient-to-br p-3 align-middle shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${theme.wrap}`}>
+                                      <div className="space-y-1 py-1">
+                                        <div className="font-extrabold text-sm text-slate-800 tracking-tight">{slot.subject}</div>
+                                        {isCoverage && (
+                                          <div className="text-[10px] font-black uppercase tracking-wide text-slate-600">Admin coverage</div>
+                                        )}
+                                        {viewType !== 'class' && slot.teacher && (
+                                          <div className="text-xs font-semibold text-slate-500 bg-slate-100/80 rounded px-1.5 py-0.5 inline-block">{slot.teacher}</div>
+                                        )}
+                                      </div>
                                     </td>
-                                    {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => {
-                                      const dayPeriodsCount = config.dayPeriods?.[day] ?? config.periodsPerDay;
-                                      if (period > dayPeriodsCount) {
-                                        return (
-                                          <td key={`${day}-${period}`} className="px-2 py-1 text-xs border-l text-center bg-gray-100 text-gray-400 select-none">
-                                            -
-                                          </td>
-                                        );
-                                      }
-                                      const slot = selectedClassTimetable.timetable[day][period];
-                                      const content = slot && slot.subject !== 'Free'
-                                        ? (viewType === 'class' ? slot.subject : `${slot.subject}\n${slot.teacher}`)
-                                        : 'Free';
+                                  );
+                                })}
+                              </tr>
+                            ];
+
+                            if (showRecess) {
+                              rows.push(
+                                <tr key="recess">
+                                  <td className="p-3 whitespace-nowrap text-sm font-black text-amber-800 sticky left-0 z-10 text-left bg-amber-50 rounded-2xl border border-amber-100 shadow-sm">
+                                    Recess
+                                  </td>
+                                  {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => {
+                                    const dayPeriodsCount = config.dayPeriods?.[day] ?? config.periodsPerDay;
+                                    if (config.recessAfterPeriod >= dayPeriodsCount) {
                                       return (
-                                        <td key={`${day}-${period}`} className="px-2 py-1 text-xs border-l whitespace-pre-line text-center">
-                                          {content}
+                                        <td key={`${day}-recess`} className="p-3 rounded-2xl bg-slate-100 text-slate-400 select-none cursor-not-allowed align-middle text-center">
+                                          -
                                         </td>
                                       );
-                                    })}
-                                  </tr>
-                                ];
-
-                                if (showRecess) {
-                                  rows.push(
-                                    <tr key="recess" className="bg-yellow-50">
-                                      <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
-                                        Recess
+                                    }
+                                    return (
+                                      <td key={`${day}-recess`} className="p-3 rounded-2xl bg-gradient-to-r from-amber-100 via-amber-50 to-orange-100 border border-amber-200 text-center align-middle font-black text-amber-800 uppercase tracking-widest text-xs shadow-sm animate-pulse">
+                                        RECESS Break
                                       </td>
-                                      {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => {
-                                        const dayPeriodsCount = config.dayPeriods?.[day] ?? config.periodsPerDay;
-                                        if (config.recessAfterPeriod >= dayPeriodsCount) {
-                                          return (
-                                            <td key={`${day}-recess`} className="px-2 py-1 text-xs border-l text-center bg-gray-100 text-gray-400 select-none">
-                                              -
-                                            </td>
-                                          );
-                                        }
-                                        return (
-                                          <td key={`${day}-recess`} className="px-2 py-1 text-xs border-l text-center bg-yellow-100 font-semibold text-yellow-800">
-                                            RECESS
-                                          </td>
-                                        );
-                                      })}
-                                    </tr>
-                                  );
-                                }
+                                    );
+                                  })}
+                                </tr>
+                              );
+                            }
 
-                                return rows;
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
+                            return rows;
+                          })}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 </>
@@ -842,4 +890,4 @@ const GenerateTimetable = () => {
   );
 };
 
-export default GenerateTimetable;  
+export default GenerateTimetable;

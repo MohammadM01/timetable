@@ -679,6 +679,117 @@ class TimetableGenerator {
 		}
 	}
 
+	getTeachersForSubject(classData, subject, teacherSubjectMap) {
+		const classKey = `${classData._id}-${subject.subject_name}`;
+		const stdKey = `${classData.standard}-${subject.subject_name}`;
+
+		return (teacherSubjectMap[classKey] && teacherSubjectMap[classKey].length > 0)
+			? teacherSubjectMap[classKey]
+			: (teacherSubjectMap[stdKey] || []);
+	}
+
+	assignSlot(classData, day, period, subjectName, teacher, options = {}) {
+		const teacherName = teacher?.teacherName || options.teacherName || 'Admin Coverage';
+		const teacherId = teacher?.teacherId ?? null;
+
+		this.timetable[classData._id][day][period] = {
+			subject: subjectName,
+			teacher: teacherName,
+			teacherId,
+			isAutoFilled: !!options.isAutoFilled,
+			isCoverageFallback: !!options.isCoverageFallback
+		};
+
+		if (!teacherId) return;
+
+		if (!this.teacherSchedule[teacherId]) {
+			this.teacherSchedule[teacherId] = {};
+		}
+		if (!this.teacherSchedule[teacherId][day]) {
+			this.teacherSchedule[teacherId][day] = {};
+		}
+
+		this.teacherSchedule[teacherId][day][period] = {
+			classId: classData._id,
+			className: classData.full_name,
+			subject: subjectName
+		};
+
+		const tId = teacherId?.toString();
+		if (tId) {
+			this.teacherWeeklyCount[tId] = (this.teacherWeeklyCount[tId] || 0) + 1;
+			if (!this.teacherDailyCount[tId]) this.teacherDailyCount[tId] = {};
+			this.teacherDailyCount[tId][day] = (this.teacherDailyCount[tId][day] || 0) + 1;
+		}
+	}
+
+	findAnyAvailableTeacher(teachers, day, period) {
+		for (const teacher of this.shuffleArray([...teachers])) {
+			const teacherId = teacher.teacherId;
+			if (!this.teacherSchedule[teacherId]?.[day]?.[period]) {
+				return teacher;
+			}
+		}
+		return null;
+	}
+
+	findTeacherForSingleSlot(teachers, day, period) {
+		for (let level = 1; level <= 4; level++) {
+			const teacher = this.findBestTeacherWithConstraints(teachers, [period], day, level);
+			if (teacher) return teacher;
+		}
+
+		// Last real-teacher fallback: avoid double-booking, but relax load/consecutive rules.
+		return this.findAnyAvailableTeacher(teachers, day, period);
+	}
+
+	fillAllFreePeriods(classes, subjectsByStandard, teacherSubjectMap) {
+		let filledWithTeacher = 0;
+		let filledWithCoverage = 0;
+
+		for (const classData of classes) {
+			const subjects = this.shuffleArray([...(subjectsByStandard[classData.standard] || [])]);
+			const fallbackSubject = subjects[0]?.subject_name || 'Supervised Study';
+
+			for (let day = 1; day <= this.config.daysPerWeek; day++) {
+				const dayPeriods = this.getPeriodsForDay(day);
+
+				for (let period = 1; period <= dayPeriods; period++) {
+					if (this.timetable[classData._id][day][period] !== null) continue;
+
+					let filled = false;
+
+					for (const subject of subjects) {
+						const teachers = this.getTeachersForSubject(classData, subject, teacherSubjectMap);
+						if (teachers.length === 0) continue;
+
+						const teacher = this.findTeacherForSingleSlot(teachers, day, period);
+						if (!teacher) continue;
+
+						this.assignSlot(classData, day, period, subject.subject_name, teacher, { isAutoFilled: true });
+						filledWithTeacher++;
+						filled = true;
+						break;
+					}
+
+					if (!filled) {
+						this.assignSlot(classData, day, period, fallbackSubject, null, {
+							teacherName: 'Admin Coverage',
+							isAutoFilled: true,
+							isCoverageFallback: true
+						});
+						filledWithCoverage++;
+					}
+				}
+			}
+		}
+
+		this.autoFilledSlots = filledWithTeacher + filledWithCoverage;
+		this.coverageFallbackSlots = filledWithCoverage;
+		this.unassignedPeriods = [];
+		this.log.push(`Final fill pass completed: ${filledWithTeacher} slots filled with teachers, ${filledWithCoverage} slots filled with admin coverage`);
+	}
+
 	verifyTeacherLimits() {
 		this.log.push('--- Post-Generation Teacher Limit Verification ---');
 		let weeklyViolations = 0;
@@ -720,7 +831,9 @@ class TimetableGenerator {
 				totalTeachers: teachers.length,
 				totalSubjects: subjects.length,
 				conflicts: this.conflicts.length,
-				unassignedPeriods: this.unassignedPeriods.length
+				unassignedPeriods: this.unassignedPeriods.length,
+				autoFilledSlots: this.autoFilledSlots || 0,
+				coverageFallbackSlots: this.coverageFallbackSlots || 0
 			}
 		});
 

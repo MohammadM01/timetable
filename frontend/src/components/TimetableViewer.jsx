@@ -6,6 +6,22 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Calendar, Users, BookOpen, Eye, Download } from 'lucide-react';
 
+const subjectThemes = [
+  { wrap: 'from-sky-100 via-cyan-50 to-blue-100 border-sky-200 text-sky-950', chip: 'bg-sky-600/10 text-sky-800', dot: 'bg-sky-500' },
+  { wrap: 'from-emerald-100 via-teal-50 to-green-100 border-emerald-200 text-emerald-950', chip: 'bg-emerald-600/10 text-emerald-800', dot: 'bg-emerald-500' },
+  { wrap: 'from-amber-100 via-orange-50 to-yellow-100 border-amber-200 text-amber-950', chip: 'bg-amber-600/10 text-amber-800', dot: 'bg-amber-500' },
+  { wrap: 'from-rose-100 via-pink-50 to-red-100 border-rose-200 text-rose-950', chip: 'bg-rose-600/10 text-rose-800', dot: 'bg-rose-500' },
+  { wrap: 'from-indigo-100 via-blue-50 to-violet-100 border-indigo-200 text-indigo-950', chip: 'bg-indigo-600/10 text-indigo-800', dot: 'bg-indigo-500' },
+  { wrap: 'from-fuchsia-100 via-purple-50 to-pink-100 border-fuchsia-200 text-fuchsia-950', chip: 'bg-fuchsia-600/10 text-fuchsia-800', dot: 'bg-fuchsia-500' },
+  { wrap: 'from-lime-100 via-green-50 to-emerald-100 border-lime-200 text-lime-950', chip: 'bg-lime-600/10 text-lime-800', dot: 'bg-lime-500' },
+  { wrap: 'from-teal-100 via-cyan-50 to-sky-100 border-teal-200 text-teal-950', chip: 'bg-teal-600/10 text-teal-800', dot: 'bg-teal-500' }
+];
+
+const getSubjectTheme = (subject = 'Coverage') => {
+  const hash = subject.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return subjectThemes[hash % subjectThemes.length];
+};
+
 const TimetableViewer = () => {
   const [loading, setLoading] = useState(false);
   const [classes, setClasses] = useState([]);
@@ -120,47 +136,61 @@ const TimetableViewer = () => {
     const periodNames = Object.keys(schedule[dayNames[0]] || {});
 
     return (
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse border border-gray-300">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="border border-gray-300 p-2 font-semibold">Day/Period</th>
-              {periodNames.map(period => (
-                <th key={period} className="border border-gray-300 p-2 font-semibold text-center">
-                  {period}
+      <div className="overflow-hidden rounded-[2rem] border border-white/70 bg-white/90 shadow-2xl shadow-slate-100/60 backdrop-blur">
+        <div className="p-4 md:p-6 overflow-x-auto">
+          <table className="w-full min-w-[800px] border-separate border-spacing-2">
+            <thead>
+              <tr className="text-slate-800 text-sm font-black text-center">
+                <th className="p-3 text-left sticky left-0 z-20 rounded-2xl bg-slate-950 text-white shadow-lg">
+                  Day / Period
                 </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {dayNames.map(day => (
-              <tr key={day}>
-                <td className="border border-gray-300 p-2 font-semibold bg-gray-50">
-                  {day}
-                </td>
-                {periodNames.map(period => {
-                  const slot = schedule[day][period];
-                  const isFree = !slot || slot.subject === 'Free';
-                  
-                  return (
-                    <td key={period} className={`border border-gray-300 p-2 text-center ${
-                      isFree ? 'bg-gray-100' : 'bg-white'
-                    }`}>
-                      {isFree ? (
-                        <span className="text-gray-500">Free</span>
-                      ) : (
-                        <div className="space-y-1">
-                          <div className="font-medium text-sm">{slot.subject}</div>
-                          <div className="text-xs text-gray-600">{slot.teacher || slot.className}</div>
-                        </div>
-                      )}
-                    </td>
-                  );
-                })}
+                {periodNames.map(period => (
+                  <th key={period} className="p-3 text-center rounded-2xl bg-slate-100 font-black shadow-sm">
+                    {period}
+                  </th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="text-center">
+              {dayNames.map(day => (
+                <tr key={day}>
+                  <td className="p-3 whitespace-nowrap text-sm font-black text-slate-700 sticky left-0 z-10 text-left bg-white rounded-2xl border border-slate-100 shadow-sm">
+                    {day}
+                  </td>
+                  {periodNames.map(period => {
+                    const slot = schedule[day][period];
+                    const isFree = !slot || slot.subject === 'Free' || slot.isFree;
+                    
+                    if (isFree) {
+                      return (
+                        <td key={period} className="p-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 text-slate-400 font-bold select-none text-center align-middle">
+                          <div className="py-2 text-slate-400 text-xs font-semibold tracking-wide uppercase">Free</div>
+                        </td>
+                      );
+                    }
+
+                    const isCoverage = slot.subject === 'Supervised Study' || slot.teacher === 'Admin Coverage';
+                    const theme = getSubjectTheme(slot.subject);
+
+                    return (
+                      <td key={period} className={`relative rounded-2xl border bg-gradient-to-br p-3 align-middle shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${theme.wrap}`}>
+                        <div className="space-y-1 py-1">
+                          <div className="font-extrabold text-sm text-slate-800 tracking-tight">{slot.subject}</div>
+                          {isCoverage && (
+                            <div className="text-[10px] font-black uppercase tracking-wide text-slate-600">Admin coverage</div>
+                          )}
+                          <div className="text-xs font-semibold text-slate-500 bg-slate-100/80 rounded px-1.5 py-0.5 inline-block">
+                            {slot.teacher || slot.className}
+                          </div>
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     );
   };
@@ -172,57 +202,70 @@ const TimetableViewer = () => {
     const classNames = Object.keys(overview[dayNames[0]][periodNames[0]] || {});
 
     return (
-      <div className="space-y-4">
+      <div className="space-y-6">
         {dayNames.map(day => (
-          <Card key={day}>
-            <CardHeader>
-              <CardTitle className="text-lg">{day}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse border border-gray-300">
-                  <thead>
-                    <tr className="bg-gray-100">
-                      <th className="border border-gray-300 p-2 font-semibold">Class/Period</th>
-                      {periodNames.map(period => (
-                        <th key={period} className="border border-gray-300 p-2 font-semibold text-center">
-                          {period}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {classNames.map(className => (
-                      <tr key={className}>
-                        <td className="border border-gray-300 p-2 font-semibold bg-gray-50">
-                          {className}
-                        </td>
-                        {periodNames.map(period => {
-                          const slot = overview[day][period][className];
-                          const isFree = !slot || slot.subject === 'Free';
-                          
+          <div key={day} className="overflow-hidden rounded-[2rem] border border-white/70 bg-white/90 shadow-2xl shadow-purple-100/40 backdrop-blur">
+            <div className="bg-gradient-to-r from-purple-50 via-white to-indigo-50 px-6 py-4 border-b border-purple-100">
+              <h3 className="text-lg font-extrabold bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent flex items-center gap-2">
+                <span>📅</span> {day} Schedule
+              </h3>
+            </div>
+            
+            <div className="p-4 md:p-6 overflow-x-auto">
+              <table className="w-full min-w-[800px] border-separate border-spacing-2">
+                <thead>
+                  <tr className="text-slate-800 text-sm font-black text-center">
+                    <th className="p-3 text-left sticky left-0 z-20 rounded-2xl bg-slate-950 text-white shadow-lg">
+                      Class / Period
+                    </th>
+                    {periodNames.map(period => (
+                      <th key={period} className="p-3 text-center rounded-2xl bg-slate-100 font-black shadow-sm">
+                        {period}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="text-center">
+                  {classNames.map(className => (
+                    <tr key={className}>
+                      <td className="p-3 whitespace-nowrap text-sm font-black text-slate-700 sticky left-0 z-10 text-left bg-white rounded-2xl border border-slate-100 shadow-sm">
+                        {className}
+                      </td>
+                      {periodNames.map(period => {
+                        const slot = overview[day][period][className];
+                        const isFree = !slot || slot.subject === 'Free';
+                        
+                        if (isFree) {
                           return (
-                            <td key={period} className={`border border-gray-300 p-2 text-center ${
-                              isFree ? 'bg-gray-100' : 'bg-white'
-                            }`}>
-                              {isFree ? (
-                                <span className="text-gray-500">Free</span>
-                              ) : (
-                                <div className="space-y-1">
-                                  <div className="font-medium text-sm">{slot.subject}</div>
-                                  <div className="text-xs text-gray-600">{slot.teacher}</div>
-                                </div>
-                              )}
+                            <td key={period} className="p-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 text-slate-400 font-bold select-none text-center align-middle">
+                              <div className="py-2 text-slate-400 text-xs font-semibold tracking-wide uppercase">Free</div>
                             </td>
                           );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
+                        }
+
+                        const isCoverage = slot.subject === 'Supervised Study' || slot.teacher === 'Admin Coverage';
+                        const theme = getSubjectTheme(slot.subject);
+
+                        return (
+                          <td key={period} className={`relative rounded-2xl border bg-gradient-to-br p-3 align-middle shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${theme.wrap}`}>
+                            <div className="space-y-1 py-1">
+                              <div className="font-extrabold text-sm text-slate-800 tracking-tight">{slot.subject}</div>
+                              {isCoverage && (
+                                <div className="text-[10px] font-black uppercase tracking-wide text-slate-600">Admin coverage</div>
+                              )}
+                              <div className="text-xs font-semibold text-slate-500 bg-slate-100/80 rounded px-1.5 py-0.5 inline-block">
+                                {slot.teacher}
+                              </div>
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         ))}
       </div>
     );
@@ -240,7 +283,7 @@ const TimetableViewer = () => {
         <CardContent className="space-y-6">
           {/* View Type Selection */}
           <div className="space-y-4">
-            <Label className="text-lg font-semibold">View Type</Label>
+            <label className="block text-lg font-extrabold text-slate-700">View Type</label>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Card 
                 className={`cursor-pointer transition-colors ${
@@ -286,7 +329,7 @@ const TimetableViewer = () => {
           {/* Selection Controls */}
           {viewType === 'student' && (
             <div className="space-y-4">
-              <Label className="text-lg font-semibold">Select Class</Label>
+              <label className="block text-lg font-extrabold text-slate-700">Select Class</label>
               <Select value={selectedClass} onValueChange={setSelectedClass}>
                 <SelectTrigger>
                   <SelectValue placeholder="Choose a class" />
@@ -304,7 +347,7 @@ const TimetableViewer = () => {
 
           {viewType === 'teacher' && (
             <div className="space-y-4">
-              <Label className="text-lg font-semibold">Select Teacher</Label>
+              <label className="block text-lg font-extrabold text-slate-700">Select Teacher</label>
               <Select value={selectedTeacher} onValueChange={setSelectedTeacher}>
                 <SelectTrigger>
                   <SelectValue placeholder="Choose a teacher" />

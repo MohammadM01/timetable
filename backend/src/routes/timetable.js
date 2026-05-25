@@ -7,6 +7,13 @@ import Subject from '../models/Subject.js';
 import Class from '../models/Class.js';
 import { escapeRegex } from '../utils/helpers.js';
 
+const coverageSlot = (subject = 'Supervised Study') => ({
+	subject,
+	teacher: 'Admin Coverage',
+	teacherId: null,
+	isCoverageFallback: true
+});
+
 const getPeriodsForDayFromConfig = (config, dayNum) => {
 	const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 	const dayName = dayNames[dayNum - 1] || `Day ${dayNum}`;
@@ -127,11 +134,7 @@ router.get('/class/:id', async (req, res) => {
 			const dayPeriods = getPeriodsForDayFromConfig(timetable.schoolConfig, day);
 			for (let period = 1; period <= dayPeriods; period++) {
 				const slot = classTimetable[day] && classTimetable[day][period];
-				formattedTimetable.schedule[dayName][`Period ${period}`] = slot || {
-					subject: 'Free',
-					teacher: 'Free',
-					teacherId: null
-				};
+				formattedTimetable.schedule[dayName][`Period ${period}`] = slot || coverageSlot();
 			}
 		}
 
@@ -179,11 +182,7 @@ router.get('/school', async (req, res) => {
 					const classTimetable = timetable.timetable[classData._id];
 					const slot = classTimetable && classTimetable[day] && classTimetable[day][period];
 
-					schoolTimetable.overview[dayName][`Period ${period}`][classData.full_name] = slot || {
-						subject: 'Free',
-						teacher: 'Free',
-						teacherId: null
-					};
+					schoolTimetable.overview[dayName][`Period ${period}`][classData.full_name] = slot || coverageSlot();
 				}
 			}
 		}
@@ -697,7 +696,7 @@ router.put('/cell', async (req, res) => {
 				};
 			}
 		} 
-		// Action 2: CLEAR slot (Free period)
+		// Action 2: CLEAR slot -> replace with supervised coverage so class periods are never free.
 		else if (action === 'clear' || subjectName === 'Free' || !subjectName) {
 			const cell = timetableObj[classId][dayNum][periodNum];
 			if (cell && cell.teacherId) {
@@ -706,7 +705,10 @@ router.put('/cell', async (req, res) => {
 					delete teacherScheduleObj[tId][dayNum][periodNum];
 				}
 			}
-			timetableObj[classId][dayNum][periodNum] = null;
+			timetableObj[classId][dayNum][periodNum] = {
+				...coverageSlot(),
+				isManualOverride: true
+			};
 		} 
 		// Action 3: EDIT cell
 		else {
