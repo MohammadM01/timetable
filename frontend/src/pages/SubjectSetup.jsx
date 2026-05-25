@@ -298,7 +298,7 @@ const SubjectSetup = () => {
   return (
     <div className="p-6 space-y-8">
       {/* Main Heading */}
-      <h2 className="text-3xl font-bold mb-6" style={{ color: '#334155' }}>Subject Setup</h2>
+      <h2 className="text-2xl font-semibold tracking-tight mb-6" style={{ color: '#334155' }}>Subject Setup</h2>
 
       {/* Bulk Upload Section */}
       <div className="bg-white p-6 rounded-lg shadow-lg mb-6">

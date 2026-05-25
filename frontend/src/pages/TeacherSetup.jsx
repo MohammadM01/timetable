@@ -450,7 +450,7 @@ const TeacherSetup = () => {
   return (
     <div className="p-6 space-y-8">
       <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold" style={{ color: '#334155' }}>Teacher Setup</h2>
+        <h2 className="text-2xl font-semibold tracking-tight" style={{ color: '#334155' }}>Teacher Setup</h2>
       </div>
 
       {/* Success/Error Messages */}

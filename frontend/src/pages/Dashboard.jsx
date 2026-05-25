@@ -69,10 +69,10 @@ const Dashboard = () => {
         <div className="relative z-10 grid gap-6 lg:grid-cols-[1.4fr_0.8fr] lg:items-center">
           <div>
             <p className="kicker">2026 constraint studio</p>
-            <h1 className="mt-3 max-w-4xl text-4xl font-black leading-tight md:text-6xl">
+            <h1 className="mt-3 max-w-4xl text-3xl font-semibold tracking-tight leading-tight md:text-4xl">
               Build beautiful timetables with <span className="gradient-title">zero free class periods.</span>
             </h1>
-            <p className="mt-4 max-w-2xl text-base font-semibold leading-7 text-slate-600">
+            <p className="mt-4 max-w-2xl text-base font-medium leading-7 text-slate-600">
               Your Excel rules drive the engine: weekly totals, daily teacher caps, block periods, recess resets, and no double booking.
             </p>
             <div className="mt-6 flex flex-wrap gap-2">

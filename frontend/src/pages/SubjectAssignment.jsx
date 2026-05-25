@@ -392,7 +392,7 @@ const SubjectAssignment = () => {
   if (loading) {
     return (
       <div className="p-6">
-        <h2 className="text-3xl font-bold mb-6" style={{ color: '#334155' }}>Subject Assignment Management</h2>
+        <h2 className="text-2xl font-semibold tracking-tight mb-6" style={{ color: '#334155' }}>Subject Assignment Management</h2>
         <div className="flex justify-center items-center h-64">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
@@ -405,7 +405,7 @@ const SubjectAssignment = () => {
 
   return (
     <div className="p-6">
-      <h2 className="text-3xl font-bold mb-6" style={{ color: '#334155' }}>Subject Assignment Management</h2>
+      <h2 className="text-2xl font-semibold tracking-tight mb-6" style={{ color: '#334155' }}>Subject Assignment Management</h2>
 
       {/* Debug Info */}
       <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded mb-4 text-sm">
