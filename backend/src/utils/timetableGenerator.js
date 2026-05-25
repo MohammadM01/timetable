@@ -26,6 +26,19 @@ class TimetableGenerator {
 
 	}
 
+	getPeriodsForDay(dayNum) {
+		const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+		const dayName = dayNames[dayNum - 1] || `Day ${dayNum}`;
+		
+		if (this.config.dayPeriods && typeof this.config.dayPeriods === 'object') {
+			if (this.config.dayPeriods[dayName] !== undefined && this.config.dayPeriods[dayName] !== null) {
+				return Number(this.config.dayPeriods[dayName]);
+			}
+		}
+		
+		return this.config.periodsPerDay || 8;
+	}
+
 	async generate() {
 		try {
 			this.log.push('Starting timetable generation...');
@@ -112,7 +125,8 @@ class TimetableGenerator {
 			this.timetable[classData._id] = {};
 			for (let day = 1; day <= this.config.daysPerWeek; day++) {
 				this.timetable[classData._id][day] = {};
-				for (let period = 1; period <= this.config.periodsPerDay; period++) {
+				const dayPeriodsCount = this.getPeriodsForDay(day);
+				for (let period = 1; period <= dayPeriodsCount; period++) {
 					this.timetable[classData._id][day][period] = null;
 				}
 			}
@@ -141,7 +155,7 @@ class TimetableGenerator {
 
 		// Create subject-teacher mapping
 		for (const ts of teacherSubjects) {
-			const key = `${ts.standard}-${ts.subjectName}`;
+			const key = ts.classId ? `${ts.classId}-${ts.subjectName}` : `${ts.standard}-${ts.subjectName}`;
 			if (!map[key]) {
 				map[key] = [];
 			}
@@ -162,8 +176,12 @@ class TimetableGenerator {
 
 		// Calculate total periods needed
 		const totalPeriodsNeeded = subjects.reduce((sum, subject) => sum + subject.weekly_periods, 0);
-		const availablePeriods = this.config.daysPerWeek * this.config.periodsPerDay;
-
+		
+		let availablePeriods = 0;
+		for (let d = 1; d <= this.config.daysPerWeek; d++) {
+			availablePeriods += this.getPeriodsForDay(d);
+		}
+ 
 		if (totalPeriodsNeeded > availablePeriods) {
 			this.log.push(`Warning: ${classData.full_name} needs ${totalPeriodsNeeded} periods but only ${availablePeriods} available`);
 		}
@@ -284,11 +302,17 @@ class TimetableGenerator {
 
 	async allocateSubjectPeriod(classData, allocation, teacherSubjectMap) {
 		const { subject, distribution } = allocation;
-		const key = `${classData.standard}-${subject.subject_name}`;
-		const availableTeachers = teacherSubjectMap[key] || [];
-
+		
+		// Try class-specific mapping first, fallback to standard-wide mapping
+		const classKey = `${classData._id}-${subject.subject_name}`;
+		const stdKey = `${classData.standard}-${subject.subject_name}`;
+		
+		const availableTeachers = (teacherSubjectMap[classKey] && teacherSubjectMap[classKey].length > 0)
+			? teacherSubjectMap[classKey]
+			: (teacherSubjectMap[stdKey] || []);
+		
 		if (availableTeachers.length === 0) {
-			this.log.push(`No teacher available for ${subject.subject_name} in ${classData.standard}`);
+			this.log.push(`No teacher available for ${subject.subject_name} in ${classData.full_name} (${classData.standard})`);
 			return false;
 		}
 
@@ -311,8 +335,17 @@ class TimetableGenerator {
 				continue;
 			}
 
-			// Find best teacher for these periods with overlap prevention
-			const teacher = this.findBestTeacherWithOverlapCheck(availableTeachers, availablePeriods, day);
+			// Find best teacher for these periods with constraints check (strict max 2 continuous active/free)
+			let teacher = null;
+			for (let level = 1; level <= 3; level++) {
+				teacher = this.findBestTeacherWithConstraints(availableTeachers, availablePeriods, day, level);
+				if (teacher) {
+					if (level > 1) {
+						this.log.push(`Teacher constraints relaxed to level ${level} for ${teacher.teacherName} on day ${day}`);
+					}
+					break;
+				}
+			}
 
 			if (!teacher) {
 				this.log.push(`No suitable teacher found for ${subject.subject_name} on day ${day}`);
@@ -355,7 +388,8 @@ class TimetableGenerator {
 
 	findAvailablePeriods(classId, day, count) {
 		const available = [];
-		for (let period = 1; period <= this.config.periodsPerDay; period++) {
+		const dayPeriods = this.getPeriodsForDay(day);
+		for (let period = 1; period <= dayPeriods; period++) {
 			if (this.timetable[classId][day][period] === null) {
 				available.push(period);
 				if (available.length >= count) {
@@ -368,7 +402,8 @@ class TimetableGenerator {
 
 	findAvailablePeriodsOptimized(classId, day, count) {
 		const available = [];
-		for (let period = 1; period <= this.config.periodsPerDay; period++) {
+		const dayPeriods = this.getPeriodsForDay(day);
+		for (let period = 1; period <= dayPeriods; period++) {
 			if (this.timetable[classId][day][period] === null) {
 				available.push(period);
 			}
@@ -378,18 +413,17 @@ class TimetableGenerator {
 		if (available.length >= count) {
 			// Prioritize filling gaps in the middle of the day
 			const sortedAvailable = available.sort((a, b) => {
-				// Prefer periods that are surrounded by occupied periods
 				const aHasNeighbors = this.hasOccupiedNeighbors(classId, day, a);
 				const bHasNeighbors = this.hasOccupiedNeighbors(classId, day, b);
 
 				if (aHasNeighbors && !bHasNeighbors) return -1;
 				if (!aHasNeighbors && bHasNeighbors) return 1;
 
-				// If both or neither have neighbors, prefer earlier periods
-				return a - b;
+				// Random tie-breaker for fully dynamic/random allocations!
+				return Math.random() - 0.5;
 			});
 
-			return sortedAvailable.slice(0, count);
+			return sortedAvailable.slice(0, count).sort((a, b) => a - b);
 		}
 
 		return available;
@@ -398,15 +432,15 @@ class TimetableGenerator {
 	findAvailablePeriodsConsecutive(classId, day, count) {
 		// Look for 'count' null slots in a row
 		const slots = this.timetable[classId][day];
-		for (let period = 1; period <= this.config.periodsPerDay - count + 1; period++) {
+		const candidates = [];
+		const dayPeriods = this.getPeriodsForDay(day);
+		for (let period = 1; period <= dayPeriods - count + 1; period++) {
 			let isConsecutive = true;
 			for (let i = 0; i < count; i++) {
 				if (slots[period + i] !== null) {
 					isConsecutive = false;
 					break;
 				}
-				// Optional: Check Recess break?
-				// If recess is after period 4, and we want 4 and 5, it spans recess. Usually allowed.
 			}
 
 			if (isConsecutive) {
@@ -414,8 +448,14 @@ class TimetableGenerator {
 				for (let i = 0; i < count; i++) {
 					result.push(period + i);
 				}
-				return result;
+				candidates.push(result);
 			}
+		}
+
+		if (candidates.length > 0) {
+			// Randomly select one of the consecutive candidate blocks!
+			const shuffledCandidates = this.shuffleArray(candidates);
+			return shuffledCandidates[0];
 		}
 		return [];
 	}
@@ -423,79 +463,107 @@ class TimetableGenerator {
 	hasOccupiedNeighbors(classId, day, period) {
 		const prevPeriod = period - 1;
 		const nextPeriod = period + 1;
+		const dayPeriods = this.getPeriodsForDay(day);
 
 		const prevOccupied = prevPeriod >= 1 && this.timetable[classId][day][prevPeriod] !== null;
-		const nextOccupied = nextPeriod <= this.config.periodsPerDay && this.timetable[classId][day][nextPeriod] !== null;
+		const nextOccupied = nextPeriod <= dayPeriods && this.timetable[classId][day][nextPeriod] !== null;
 
 		return prevOccupied || nextOccupied;
 	}
 
-	findBestTeacher(teachers, periods, day) {
-		// Simple teacher selection - can be enhanced with more sophisticated logic
-		for (const teacher of teachers) {
-			// Check if teacher is available for all required periods
-			let available = true;
+	findBestTeacherWithConstraints(teachers, periods, day, strictnessLevel = 1) {
+		// Shuffle teachers list for random assignment
+		const shuffledTeachers = this.shuffleArray([...teachers]);
+
+		for (const t of shuffledTeachers) {
+			const teacherId = t.teacherId;
+
+			// Check double-booking (no teacher overlap)
+			let isFree = true;
 			for (const period of periods) {
-				if (this.teacherSchedule[teacher.teacherId] &&
-					this.teacherSchedule[teacher.teacherId][day] &&
-					this.teacherSchedule[teacher.teacherId][day][period]) {
-					available = false;
+				if (this.teacherSchedule[teacherId]?.[day]?.[period]) {
+					isFree = false;
 					break;
 				}
 			}
+			if (!isFree) continue;
 
-			if (available) {
-				return teacher;
-			}
-		}
-		return null;
-	}
-
-	findBestTeacherWithOverlapCheck(teachers, periods, day) {
-		// Enhanced teacher selection with better overlap prevention
-		const availableTeachers = [];
-
-		for (const teacher of teachers) {
-			let conflicts = 0;
-			let availablePeriods = 0;
-
+			// Simulate assigning these periods to check teacher constraints
+			const schedule = this.teacherSchedule[teacherId]?.[day] || {};
+			const simulatedSchedule = { ...schedule };
 			for (const period of periods) {
-				if (this.teacherSchedule[teacher.teacherId] &&
-					this.teacherSchedule[teacher.teacherId][day] &&
-					this.teacherSchedule[teacher.teacherId][day][period]) {
-					conflicts++;
+				simulatedSchedule[period] = true;
+			}
+
+			// 1. Max active continuous periods check (strictly max allowed: 2 under all levels)
+			const dayPeriods = this.getPeriodsForDay(day);
+			const recessAfter = this.config.recessAfterPeriod;
+			let continuousCount = 0;
+			let maxContinuous = 0;
+			for (let p = 1; p <= dayPeriods; p++) {
+				// Recess acts as a reset point for consecutive periods
+				if (recessAfter && p === recessAfter + 1) {
+					continuousCount = 0;
+				}
+
+				if (simulatedSchedule[p]) {
+					continuousCount++;
+					if (continuousCount > maxContinuous) {
+						maxContinuous = continuousCount;
+					}
 				} else {
-					availablePeriods++;
+					continuousCount = 0;
 				}
 			}
 
-			if (availablePeriods === periods.length) {
-				// Teacher is completely available
-				return teacher;
-			} else if (availablePeriods > 0) {
-				// Teacher has some availability
-				availableTeachers.push({
-					teacher,
-					conflicts,
-					availablePeriods,
-					score: availablePeriods - conflicts * 2 // Penalize conflicts heavily
-				});
+			if (maxContinuous > 2) continue;
+
+			if (strictnessLevel === 3) {
+				return t; // Level 3: Overlap check and consecutive active check only
 			}
-		}
 
-		// Sort by score (highest first) and return the best teacher
-		if (availableTeachers.length > 0) {
-			availableTeachers.sort((a, b) => b.score - a.score);
-			return availableTeachers[0].teacher;
-		}
+			// 2. Max free continuous periods check (gaps) (max allowed: 2 for strict, 3 for relaxed)
+			const allowedFree = strictnessLevel === 1 ? 2 : 3;
+			let activePeriods = [];
+			for (let p = 1; p <= dayPeriods; p++) {
+				if (simulatedSchedule[p]) {
+					activePeriods.push(p);
+				}
+			}
 
+			let maxFreeContinuous = 0;
+			if (activePeriods.length >= 2) {
+				const firstActive = activePeriods[0];
+				const lastActive = activePeriods[activePeriods.length - 1];
+
+				let freeContinuousCount = 0;
+				for (let p = firstActive; p <= lastActive; p++) {
+					if (!simulatedSchedule[p]) {
+						freeContinuousCount++;
+						if (freeContinuousCount > maxFreeContinuous) {
+							maxFreeContinuous = freeContinuousCount;
+						}
+					} else {
+						freeContinuousCount = 0;
+					}
+				}
+			}
+
+			if (maxFreeContinuous > allowedFree) continue;
+
+			return t; // Found a valid teacher satisfying all constraints!
+		}
 		return null;
 	}
 
 	async fillRemainingPeriods(classData, subject, remainingPeriods, teacherSubjectMap) {
-		const key = `${classData.standard}-${subject.subject_name}`;
-		const availableTeachers = teacherSubjectMap[key] || [];
-
+		const classKey = `${classData._id}-${subject.subject_name}`;
+		const stdKey = `${classData.standard}-${subject.subject_name}`;
+		
+		const availableTeachers = (teacherSubjectMap[classKey] && teacherSubjectMap[classKey].length > 0)
+			? teacherSubjectMap[classKey]
+			: (teacherSubjectMap[stdKey] || []);
+		
 		if (availableTeachers.length === 0) return;
 
 		// Try to fill remaining periods across all days
@@ -505,7 +573,12 @@ class TimetableGenerator {
 			const availablePeriods = this.findAvailablePeriodsOptimized(classData._id, day, remainingPeriods);
 			if (availablePeriods.length === 0) continue;
 
-			const teacher = this.findBestTeacherWithOverlapCheck(availableTeachers, availablePeriods, day);
+			// Use the new constraints-aware teacher check with fallback relaxation
+			let teacher = null;
+			for (let level = 1; level <= 3; level++) {
+				teacher = this.findBestTeacherWithConstraints(availableTeachers, availablePeriods, day, level);
+				if (teacher) break;
+			}
 			if (!teacher) continue;
 
 			// Allocate available periods

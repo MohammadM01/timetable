@@ -42,30 +42,44 @@ export const SchoolProvider = ({ children }) => {
       const principalData = await principalResponse.json();
       console.log('Raw principal data from API:', principalData);
       
-      // Start with regular teachers, ensure IDs are numbers
+      // Start with regular teachers, ensure IDs are numbers except for principal
       let allTeachers = data
         .filter(teacher => teacher && teacher.id) // Filter out any invalid teacher data
         .map(teacher => ({
           ...teacher,
-          id: parseInt(teacher.id),
-          isPrincipal: false
+          id: teacher.id === 'principal' ? 'principal' : parseInt(teacher.id),
+          isPrincipal: teacher.id === 'principal'
         }));
 
-      // Add principal if exists
+      // Add principal if exists and not already in the list
       if (principalData.length > 0) {
         const principalTeacher = {
           ...principalData[0],
-          id: parseInt(principalData[0].id), // Parse the ID from the database
+          id: 'principal',
           isPrincipal: true,
           weeklyPeriods: principalData[0].weekly_periods,
           dailyPeriods: principalData[0].daily_max_periods
         };
         // Only add principal if they're not already in the teachers list
         const principalExists = allTeachers.some(
-          teacher => teacher.name.toLowerCase() === principalData[0].name.toLowerCase()
+          teacher => teacher.id === 'principal' || teacher.name.toLowerCase() === principalData[0].name.toLowerCase()
         );
         if (!principalExists) {
           allTeachers = [principalTeacher, ...allTeachers];
+        } else {
+          // If the principal exists but was imported as a regular teacher, update their row
+          allTeachers = allTeachers.map(t => {
+            if (t.name.toLowerCase() === principalData[0].name.toLowerCase()) {
+              return {
+                ...t,
+                id: 'principal',
+                isPrincipal: true,
+                weeklyPeriods: principalData[0].weekly_periods,
+                dailyPeriods: principalData[0].daily_max_periods
+              };
+            }
+            return t;
+          });
         }
       }
 

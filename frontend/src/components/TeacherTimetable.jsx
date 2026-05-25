@@ -15,10 +15,10 @@ const TeacherTimetable = ({ teacherId, teacherName }) => {
     try {
       setLoading(true);
       setError('');
-      
+
       console.log('Fetching timetable for teacher ID:', teacherId);
       const response = await fetch(`http://localhost:5000/api/timetable/teacher/${teacherId}`);
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         console.error('Teacher timetable fetch error:', errorData);
@@ -95,6 +95,15 @@ const TeacherTimetable = ({ teacherId, teacherName }) => {
                   {day}
                 </td>
                 {periods.map(period => {
+                  const dayPeriodsCount = timetable.config?.dayPeriods?.[day] ?? timetable.config.periodsPerDay;
+                  if (period > dayPeriodsCount) {
+                    return (
+                      <td key={period} className="px-4 py-4 text-center text-sm bg-gray-100 text-gray-400 select-none cursor-not-allowed">
+                        -
+                      </td>
+                    );
+                  }
+
                   const periodData = timetable.schedule[day]?.find(p => p.period === period);
                   const isFree = !periodData || periodData.isFree;
                   

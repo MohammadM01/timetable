@@ -145,9 +145,9 @@ router.get('/', async (_req, res) => {
 				dailyPeriods: principal.daily_max_periods
 			};
 			console.log('Formatted principal:', principalRow);
-			// Place principal first. If a teacher with same name exists, do not duplicate.
-			const exists = formatted.some(t => (t.name || '').toLowerCase() === (principalRow.name || '').toLowerCase());
-			const list = exists ? formatted : [principalRow, ...formatted];
+			// Exclude any teacher from the regular list that has the same name as the principal (case-insensitive)
+			const filteredTeachers = formatted.filter(t => (t.name || '').toLowerCase().trim() !== (principalRow.name || '').toLowerCase().trim());
+			const list = [principalRow, ...filteredTeachers];
 			return res.json(list);
 		}
 		return res.json(formatted);
@@ -458,7 +458,7 @@ router.post('/principal', async (req, res) => {
 		// If principal exists as a teacher, remove
 		const teacherToRemove = await Teacher.findOne({ name: new RegExp('^' + escapeRegex(name) + '$', 'i') });
 		if (teacherToRemove) {
-			await Teacher.findByIdAndDelete(teacherToRemove.id);
+			await Teacher.findByIdAndDelete(teacherToRemove._id);
 		}
 		return res.json({ message: 'Principal saved' });
 	} catch (e) {

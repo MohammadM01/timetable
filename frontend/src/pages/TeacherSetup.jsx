@@ -13,6 +13,7 @@ import {
 } from '../utils/api';
 import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
+import { FaFileUpload, FaDownload } from 'react-icons/fa';
 
 const TeacherSetup = () => {
   const { teachers: existingTeachers, addTeachers, addPrincipal } = useContext(SchoolContext);
@@ -536,13 +537,14 @@ const TeacherSetup = () => {
       )}
 
       {/* Excel Upload Section */}
-      <div className="bg-white p-6 rounded-lg shadow-lg">
+      <div className="bg-white p-6 rounded-lg shadow-lg mb-6">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-semibold text-blue-600">Import Teachers</h3>
+          <h3 className="text-xl font-semibold text-blue-600">Bulk Upload Teachers</h3>
           <button
             onClick={downloadTemplate}
-            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-300 transition duration-200"
+            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-300 ease-in-out transform hover:scale-105"
           >
+            <FaDownload className="mr-2" />
             Download Template
           </button>
         </div>
@@ -555,21 +557,21 @@ const TeacherSetup = () => {
             <p className="mt-2 text-blue-600">Download the template above to see the exact format!</p>
           </div>
         </div>
-        <div
-          {...getRootProps()}
-          className={`border-2 border-dashed p-8 rounded-lg text-center cursor-pointer transition-colors duration-200 ${
-            isDragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-500'
-          }`}
-        >
-          <input {...getInputProps()} />
-          {isDragActive ? (
-            <p className="text-blue-600">Drop the Excel file here</p>
-          ) : (
-            <div>
-              <p className="text-gray-600 mb-2">Drag and drop an Excel file here, or click to select</p>
-              <p className="text-sm text-gray-500">Supported formats: .xlsx, .xls</p>
-            </div>
-          )}
+        <div className="flex items-center">
+          <label className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 cursor-pointer transition duration-300 ease-in-out transform hover:scale-105">
+            <FaFileUpload className="mr-2" />
+            Upload Excel File
+            <input
+              type="file"
+              accept=".xlsx, .xls"
+              onChange={(e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                  onDrop(e.target.files);
+                }
+              }}
+              className="hidden"
+            />
+          </label>
         </div>
       </div>
 

@@ -94,7 +94,28 @@ const TimetableViewer = () => {
   };
 
   const renderClassOrTeacherTimetable = () => {
-    const { schedule, config } = timetableData;
+    let { schedule, config } = timetableData;
+    
+    // Normalize teacher schedule if it's in array format
+    if (viewType === 'teacher') {
+      const normalizedSchedule = {};
+      Object.keys(schedule).forEach(day => {
+        normalizedSchedule[day] = {};
+        const daySchedule = schedule[day];
+        if (Array.isArray(daySchedule)) {
+          daySchedule.forEach(p => {
+            normalizedSchedule[day][`Period ${p.period}`] = {
+              subject: p.isFree ? 'Free' : p.subject,
+              className: p.isFree ? 'Free' : p.class,
+              classId: p.classId,
+              isFree: p.isFree
+            };
+          });
+        }
+      });
+      schedule = normalizedSchedule;
+    }
+    
     const dayNames = Object.keys(schedule);
     const periodNames = Object.keys(schedule[dayNames[0]] || {});
 

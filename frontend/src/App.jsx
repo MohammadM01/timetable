@@ -10,6 +10,7 @@ import GenerateTimetable from './pages/GenerateTimetable';
 import ClassTimetable from './pages/ClassTimetable';
 import SubjectAssignment from './pages/SubjectAssignment';
 import TeacherTimetables from './pages/TeacherTimetables';
+import TimetableHistory from './pages/TimetableHistory';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 
@@ -42,6 +43,7 @@ const App = () => {
                         <Route path="generate-timetable" element={<GenerateTimetable />} />
                         <Route path="class-timetable" element={<ClassTimetable />} />
                         <Route path="teacher-timetables" element={<TeacherTimetables />} />
+                        <Route path="timetable-history" element={<TimetableHistory />} />
                       </Routes>
                     </div>
                   </main>

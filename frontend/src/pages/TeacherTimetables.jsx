@@ -31,15 +31,19 @@ const TeacherTimetables = () => {
         <h3 className="text-lg font-semibold mb-4">Select Teacher</h3>
         <div className="max-w-xs">
           <select
-            value={selectedTeacher || ''}
-            onChange={(e) => handleTeacherSelect(e.target.value ? Number(e.target.value) : null)}
+            value={selectedTeacher === null ? '' : selectedTeacher}
+            onChange={(e) => {
+              const val = e.target.value;
+              const numVal = Number(val);
+              handleTeacherSelect(val && !isNaN(numVal) ? numVal : null);
+            }}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500"
           >
             <option value="">Select a Teacher</option>
             {teachers
               .filter(t => t.id !== 'principal')
               .map(teacher => (
-                <option key={teacher.id} value={teacher.id}>
+                <option key={teacher.id} value={teacher.id || ''}>
                   {teacher.name}
                 </option>
               ))}

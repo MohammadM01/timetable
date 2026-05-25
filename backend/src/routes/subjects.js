@@ -71,6 +71,21 @@ router.post('/cleanup-duplicates', async (_req, res) => {
 	}
 });
 
+// Delete all subjects
+router.delete('/all', async (req, res) => {
+	try {
+		const result = await Subject.deleteMany({});
+		return res.json({
+			success: true,
+			message: `Deleted ${result.deletedCount} subjects`,
+			deletedCount: result.deletedCount
+		});
+	} catch (e) {
+		return res.status(500).json({ error: 'Failed to delete all subjects' });
+	}
+});
+
+// Delete subject
 router.delete('/:id', async (req, res) => {
 	try {
 		await Subject.findByIdAndDelete(req.params.id);
@@ -104,19 +119,7 @@ router.put('/:id', async (req, res) => {
 	}
 });
 
-// Delete all subjects
-router.delete('/all', async (req, res) => {
-	try {
-		const result = await Subject.deleteMany({});
-		return res.json({
-			success: true,
-			message: `Deleted ${result.deletedCount} subjects`,
-			deletedCount: result.deletedCount
-		});
-	} catch (e) {
-		return res.status(500).json({ error: 'Failed to delete all subjects' });
-	}
-});
+
 
 export default router;
 

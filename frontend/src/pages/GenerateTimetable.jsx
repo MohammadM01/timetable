@@ -12,17 +12,27 @@ const GenerateTimetable = () => {
   const [viewType, setViewType] = useState('class'); // 'class' or 'teacher'
   const [warnings, setWarnings] = useState([]); // Warnings from generation
   const [customPreferences, setCustomPreferences] = useState('');
+  const [useCustomDayPeriods, setUseCustomDayPeriods] = useState(true); // Default to true so Friday half-day works out-of-the-box
   const [config, setConfig] = useState({
     daysPerWeek: 6, // Include Saturday
-    periodsPerDay: 8,
+    periodsPerDay: 9, // Let's set default to 9 periods to match the screenshot!
     periodDuration: 45,
     startTime: '08:00',
-    recessAfterPeriod: 4 // Add recess after 4th period
+    recessAfterPeriod: 5, // Recess after 5th period to match the screenshot!
+    dayPeriods: {
+      Monday: 9,
+      Tuesday: 9,
+      Wednesday: 9,
+      Thursday: 9,
+      Friday: 5, // Exactly 5 periods on Friday as requested!
+      Saturday: 5 // Default Saturday to 5 periods as well
+    }
   });
 
-  // Load classes on component mount
+  // Load classes and latest timetable on component mount
   useEffect(() => {
     fetchAvailableClasses();
+    loadTimetable(true);
   }, []);
 
   const fetchAvailableClasses = async () => {
@@ -60,7 +70,7 @@ const GenerateTimetable = () => {
       }
 
       const payload = {
-        config,
+        config: useCustomDayPeriods ? config : { ...config, dayPeriods: null },
         selectedClasses: selectedClasses.map(id => id.toString()),
         generationType: generationType === 'selected' ? 'selected' : 'all',
         viewType: 'student',
@@ -90,12 +100,18 @@ const GenerateTimetable = () => {
     }
   };
 
-  const loadTimetable = async () => {
+  const loadTimetable = async (isMount = false) => {
     try {
       const data = await getTimetable();
       console.log('Loaded timetable data:', data);
       console.log('Timetable overview structure:', data.overview);
       console.log('Timetable direct structure:', data.timetable);
+
+      if (data.config) {
+        console.log('Pre-filling configuration from database:', data.config);
+        setConfig(data.config);
+        setUseCustomDayPeriods(!!data.config.dayPeriods);
+      }
 
       if (data.overview) {
         console.log('Sample overview data:', Object.keys(data.overview));
@@ -139,7 +155,9 @@ const GenerateTimetable = () => {
       setTimetable(data);
     } catch (err) {
       console.error('Failed to load timetable:', err);
-      setError('Failed to load timetable');
+      if (!isMount) {
+        setError('Failed to load timetable');
+      }
     }
   };
 
@@ -438,6 +456,52 @@ const GenerateTimetable = () => {
               />
             </div>
           </div>
+
+          {/* Day-wise Period Configuration */}
+          <div className="mt-6 border-t pt-4">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h4 className="text-md font-semibold text-gray-800">Custom Day-wise Periods</h4>
+                <p className="text-xs text-gray-500">Configure a distinct number of periods for specific days (e.g., half-day Friday or Saturday)</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={useCustomDayPeriods}
+                  onChange={(e) => setUseCustomDayPeriods(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+              </label>
+            </div>
+
+            {useCustomDayPeriods && (
+              <div className="grid grid-cols-2 md:grid-cols-6 gap-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
+                {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].slice(0, config.daysPerWeek).map((day) => (
+                  <div key={day}>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1 uppercase tracking-wider">{day}</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="12"
+                      value={config.dayPeriods?.[day] ?? config.periodsPerDay}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || config.periodsPerDay;
+                        setConfig({
+                          ...config,
+                          dayPeriods: {
+                            ...(config.dayPeriods || {}),
+                            [day]: val
+                          }
+                        });
+                      }}
+                      className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Custom Preferences */}
@@ -495,24 +559,79 @@ const GenerateTimetable = () => {
         )}
 
         {/* Warnings */}
-        {warnings.length > 0 && (
-          <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded mt-4">
-            <div className="flex items-start">
-              <span className="text-xl mr-2">⚠️</span>
-              <div>
-                <h4 className="font-bold mb-1">Generation Warnings:</h4>
-                <ul className="list-disc list-inside space-y-1 text-sm">
-                  {warnings.slice(0, 5).map((w, idx) => (
-                    <li key={idx}>{w}</li>
-                  ))}
-                  {warnings.length > 5 && (
-                    <li className="italic text-gray-600">And {warnings.length - 5} more...</li>
-                  )}
-                </ul>
-              </div>
+        {warnings.length > 0 && (() => {
+          const capacityWarnings = warnings.filter(w => w.toLowerCase().includes('needs') && w.toLowerCase().includes('available'));
+          const otherWarnings = warnings.filter(w => !w.toLowerCase().includes('needs') || !w.toLowerCase().includes('available'));
+
+          return (
+            <div className="mt-6 space-y-4">
+              {/* Premium Capacity Conflict Card */}
+              {capacityWarnings.length > 0 && (
+                <div className="bg-red-50 border-l-4 border-red-500 p-5 rounded-lg shadow-sm text-red-900">
+                  <div className="flex items-start">
+                    <span className="text-2xl mr-3">💡</span>
+                    <div className="w-full">
+                      <h4 className="font-bold text-lg text-red-800 mb-1">
+                        Weekly Curriculum Capacity Conflict!
+                      </h4>
+                      <p className="text-sm mb-3">
+                        Your subjects require more weekly periods than the current school configuration provides. 
+                        The algorithm had to leave some periods unassigned because there are physically not enough hours in the school week.
+                      </p>
+                      
+                      <div className="space-y-2 bg-white/70 p-3 rounded-lg border border-red-100 text-xs">
+                        <span className="font-bold text-red-800 block mb-1">Standard-wise Deficit Analysis:</span>
+                        {capacityWarnings.map((w, idx) => {
+                          const match = w.match(/Warning:\s+(.+?)\s+needs\s+(\d+)\s+periods\s+but\s+only\s+(\d+)\s+available/i);
+                          if (match) {
+                            const [_, standard, needed, available] = match;
+                            const deficit = Number(needed) - Number(available);
+                            return (
+                              <div key={idx} className="flex flex-col sm:flex-row sm:justify-between border-b border-red-200/40 pb-1 last:border-0 last:pb-0">
+                                <span>Standard <strong className="text-red-700">{standard}</strong>:</span>
+                                <span>Requires <strong>{needed} periods</strong> | Week has <strong>{available} slots</strong> (Deficit: <strong className="text-red-600">-{deficit}</strong>)</span>
+                              </div>
+                            );
+                          }
+                          return <div key={idx} className="border-b border-red-200/40 pb-1 last:border-0 last:pb-0">{w}</div>;
+                        })}
+                      </div>
+                      
+                      <div className="mt-4 text-xs text-red-700 space-y-1 bg-red-100/50 p-3 rounded-lg">
+                        <span className="font-bold block text-red-800 mb-1">How to Resolve This:</span>
+                        <ul className="list-disc list-inside space-y-1 pl-1">
+                          <li><strong>Option A: Reduce Weekly Periods</strong> for standard subjects in the <a href="/subject-setup" className="font-bold underline hover:text-red-900">Subject Setup</a> page.</li>
+                          <li><strong>Option B: Increase School Hours</strong> by increasing <em>Periods per Day</em> or increasing periods on Friday/Saturday in the <em>School Configuration</em> panel above.</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Detailed Allocation Warnings */}
+              {otherWarnings.length > 0 && (
+                <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-4 rounded-lg">
+                  <div className="flex items-start">
+                    <span className="text-xl mr-2">⚠️</span>
+                    <div>
+                      <h4 className="font-bold mb-1">Detailed Allocation Warnings:</h4>
+                      <p className="text-xs text-yellow-700 mb-2">The following periods could not find free slots because the classes' daily schedules were already fully booked by other subjects:</p>
+                      <ul className="list-disc list-inside space-y-1 text-sm">
+                        {otherWarnings.slice(0, 5).map((w, idx) => (
+                          <li key={idx}>{w}</li>
+                        ))}
+                        {otherWarnings.length > 5 && (
+                          <li className="italic text-gray-600">And {otherWarnings.length - 5} more allocation issues...</li>
+                        )}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Action Buttons - Show when timetable is generated */}
         {timetable && (
@@ -659,6 +778,14 @@ const GenerateTimetable = () => {
                                       {`Period ${period}`}
                                     </td>
                                     {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => {
+                                      const dayPeriodsCount = config.dayPeriods?.[day] ?? config.periodsPerDay;
+                                      if (period > dayPeriodsCount) {
+                                        return (
+                                          <td key={`${day}-${period}`} className="px-2 py-1 text-xs border-l text-center bg-gray-100 text-gray-400 select-none">
+                                            -
+                                          </td>
+                                        );
+                                      }
                                       const slot = selectedClassTimetable.timetable[day][period];
                                       const content = slot && slot.subject !== 'Free'
                                         ? (viewType === 'class' ? slot.subject : `${slot.subject}\n${slot.teacher}`)
@@ -678,11 +805,21 @@ const GenerateTimetable = () => {
                                       <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
                                         Recess
                                       </td>
-                                      {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => (
-                                        <td key={`${day}-recess`} className="px-2 py-1 text-xs border-l text-center bg-yellow-100 font-semibold text-yellow-800">
-                                          RECESS
-                                        </td>
-                                      ))}
+                                      {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => {
+                                        const dayPeriodsCount = config.dayPeriods?.[day] ?? config.periodsPerDay;
+                                        if (config.recessAfterPeriod >= dayPeriodsCount) {
+                                          return (
+                                            <td key={`${day}-recess`} className="px-2 py-1 text-xs border-l text-center bg-gray-100 text-gray-400 select-none">
+                                              -
+                                            </td>
+                                          );
+                                        }
+                                        return (
+                                          <td key={`${day}-recess`} className="px-2 py-1 text-xs border-l text-center bg-yellow-100 font-semibold text-yellow-800">
+                                            RECESS
+                                          </td>
+                                        );
+                                      })}
                                     </tr>
                                   );
                                 }

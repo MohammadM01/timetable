@@ -369,3 +369,74 @@ export const deleteAllTeacherSubjects = async () => {
   if (!response.ok) throw new Error(data.error || 'Failed to delete all teacher-subject mappings');
   return data;
 };
+
+export const autoAssignTeacherSubjects = async () => {
+  const response = await fetch(`${API_BASE_URL}/teacher-subjects/auto-assign`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Failed to auto-assign teacher-subject mappings');
+  return data;
+};
+
+// Post-generation flexible editing API functions
+export const validateTimetableCell = async (payload) => {
+  const response = await fetch(`${API_BASE_URL}/timetable/validate-cell`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Failed to validate cell change');
+  return data;
+};
+
+export const updateTimetableCell = async (payload) => {
+  const response = await fetch(`${API_BASE_URL}/timetable/cell`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Failed to update timetable cell');
+  return data;
+};
+
+export const getTimetableHistory = async () => {
+  const response = await fetch(`${API_BASE_URL}/timetable/history`);
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Failed to fetch timetable history');
+  return data;
+};
+
+export const activateTimetableVersion = async (id) => {
+  const response = await fetch(`${API_BASE_URL}/timetable/${id}/active`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' }
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Failed to activate timetable');
+  return data;
+};
+
+export const renameTimetableVersion = async (id, label) => {
+  const response = await fetch(`${API_BASE_URL}/timetable/${id}/rename`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ label })
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Failed to rename timetable');
+  return data;
+};
+
+export const deleteTimetableVersion = async (id) => {
+  const response = await fetch(`${API_BASE_URL}/timetable/${id}`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' }
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Failed to delete timetable');
+  return data;
+};

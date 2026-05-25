@@ -2,6 +2,8 @@ import { Router } from 'express';
 import TeacherSubject from '../models/TeacherSubject.js';
 import Teacher from '../models/Teacher.js';
 import Subject from '../models/Subject.js';
+import Principal from '../models/Principal.js';
+import Class from '../models/Class.js';
 import multer from 'multer';
 import XLSX from 'xlsx';
 import fs from 'fs';
@@ -35,6 +37,8 @@ router.get('/', async (req, res) => {
 				subjectId: m.subjectId,
 				subjectName: m.subjectName || (s ? s.subject_name : 'Unknown'),
 				standard: m.standard || (s ? s.standard : 'Unknown'),
+				classId: m.classId || null,
+				className: m.className || m.standard || 'Unknown',
 				weeklyPeriods: s ? s.weekly_periods : 0,
 				preferredPeriods: m.preferredPeriods || [],
 				avoidPeriods: m.avoidPeriods || [],
@@ -117,18 +121,27 @@ router.get('/subject/:subjectId', async (req, res) => {
 // Create teacher-subject mapping
 router.post('/', async (req, res) => {
 	try {
-		const { teacherId, subjectId, preferredPeriods, avoidPeriods, consecutivePeriods } = req.body;
+		const { teacherId, subjectId, classId, className, preferredPeriods, avoidPeriods, consecutivePeriods } = req.body;
 
 		// Validate teacher exists - handle numeric ID, string ID, or name
 		let teacher;
-		const parsedTeacherId = parseInt(teacherId);
-
-		if (!isNaN(parsedTeacherId)) {
-			teacher = await Teacher.findOne({ id: parsedTeacherId });
-		} else if (typeof teacherId === 'string' && teacherId.trim()) {
-			teacher = await Teacher.findOne({ name: new RegExp('^' + escapeRegex(teacherId) + '$', 'i') });
-		} else if (req.body.teacherName && typeof req.body.teacherName === 'string') {
-			teacher = await Teacher.findOne({ name: new RegExp('^' + escapeRegex(req.body.teacherName) + '$', 'i') });
+		if (teacherId === 'principal') {
+			const p = await Principal.findOne({});
+			if (p) {
+				teacher = {
+					id: 'principal',
+					name: p.name
+				};
+			}
+		} else {
+			const parsedTeacherId = parseInt(teacherId);
+			if (!isNaN(parsedTeacherId)) {
+				teacher = await Teacher.findOne({ id: parsedTeacherId });
+			} else if (typeof teacherId === 'string' && teacherId.trim()) {
+				teacher = await Teacher.findOne({ name: new RegExp('^' + escapeRegex(teacherId) + '$', 'i') });
+			} else if (req.body.teacherName && typeof req.body.teacherName === 'string') {
+				teacher = await Teacher.findOne({ name: new RegExp('^' + escapeRegex(req.body.teacherName) + '$', 'i') });
+			}
 		}
 
 		if (!teacher) {
@@ -144,6 +157,16 @@ router.post('/', async (req, res) => {
 			return res.status(400).json({ error: 'Subject not found' });
 		}
 
+		// Resolve className if classId is provided
+		let finalClassId = classId;
+		let finalClassName = className;
+		if (classId) {
+			const cls = await Class.findById(classId);
+			if (cls) {
+				finalClassName = cls.full_name;
+			}
+		}
+
 		// Create mapping
 		const mapping = await TeacherSubject.create({
 			teacherId,
@@ -151,6 +174,8 @@ router.post('/', async (req, res) => {
 			subjectId,
 			subjectName: subject.subject_name,
 			standard: subject.standard,
+			classId: finalClassId || null,
+			className: finalClassName || subject.standard,
 			preferredPeriods: preferredPeriods || [],
 			avoidPeriods: avoidPeriods || [],
 			consecutivePeriods: consecutivePeriods || false
@@ -163,6 +188,8 @@ router.post('/', async (req, res) => {
 			subjectId: mapping.subjectId,
 			subjectName: mapping.subjectName,
 			standard: mapping.standard,
+			classId: mapping.classId,
+			className: mapping.className,
 			preferredPeriods: mapping.preferredPeriods,
 			avoidPeriods: mapping.avoidPeriods,
 			consecutivePeriods: mapping.consecutivePeriods
@@ -212,6 +239,21 @@ router.put('/:id', async (req, res) => {
 	} catch (error) {
 		console.error('Error updating teacher-subject mapping:', error);
 		return res.status(500).json({ error: 'Failed to update teacher-subject mapping' });
+	}
+});
+
+// Delete all teacher-subject mappings
+router.delete('/all', async (req, res) => {
+	try {
+		const result = await TeacherSubject.deleteMany({});
+		return res.json({
+			success: true,
+			message: `Deleted ${result.deletedCount} teacher-subject mappings`,
+			deletedCount: result.deletedCount
+		});
+	} catch (error) {
+		console.error('Error deleting all teacher-subject mappings:', error);
+		return res.status(500).json({ error: 'Failed to delete all teacher-subject mappings' });
 	}
 });
 
@@ -460,18 +502,153 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 	}
 });
 
-// Delete all teacher-subject mappings
-router.delete('/all', async (req, res) => {
+// Auto-assign subjects randomly to teachers for testing
+router.post('/auto-assign', async (req, res) => {
 	try {
-		const result = await TeacherSubject.deleteMany({});
+		console.log('🔮 Starting auto-assignment process via API...');
+		// Clear existing assignments
+		await TeacherSubject.deleteMany({});
+
+		// Fetch teachers, subjects, classes, and principal
+		const teachers = await Teacher.find({}).sort({ id: 1 });
+		const subjects = await Subject.find({});
+		const classes = await Class.find({}).sort({ standard: 1, division: 1 });
+		const principalDoc = await Principal.findOne({});
+
+		let principal = null;
+		if (principalDoc) {
+			principal = {
+				id: 'principal',
+				name: principalDoc.name,
+				weeklyPeriods: principalDoc.weekly_periods,
+				dailyPeriods: principalDoc.daily_max_periods
+			};
+		}
+
+		const regularTeachers = teachers;
+
+		// Keep track of active teaching load for each teacher
+		const teacherLoads = {};
+		teachers.forEach(t => {
+			teacherLoads[t.id] = 0;
+		});
+		if (principal) {
+			teacherLoads[principal.id] = 0;
+		}
+
+		// Map standards V, VI, VII, VIII, IX, X to their divisions
+		const classesByStandard = {};
+		classes.forEach(c => {
+			if (!classesByStandard[c.standard]) {
+				classesByStandard[c.standard] = [];
+			}
+			classesByStandard[c.standard].push(c);
+		});
+
+		let principalAssignedCount = 0;
+
+		// Group subjects by standard
+		const subjectsByStandard = {};
+		subjects.forEach(s => {
+			if (!subjectsByStandard[s.standard]) {
+				subjectsByStandard[s.standard] = [];
+			}
+			subjectsByStandard[s.standard].push(s);
+		});
+
+		// For each standard (V to X)
+		const standardsOrder = ['V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+		let regularTeacherIndex = 0;
+
+		const createdMappings = [];
+
+		for (const standard of standardsOrder) {
+			const stdSubjects = subjectsByStandard[standard] || [];
+			const stdClasses = classesByStandard[standard] || [];
+
+			for (const subject of stdSubjects) {
+				let assignedTeacher = null;
+
+				// Simple check if Principal should teach this subject
+				if (principal && principalAssignedCount + subject.weekly_periods <= principal.weeklyPeriods && 
+					(subject.subject_name === 'MI' || subject.subject_name === 'PE') && 
+					principalAssignedCount < principal.weeklyPeriods) {
+					
+					assignedTeacher = principal;
+					principalAssignedCount += subject.weekly_periods;
+					teacherLoads[principal.id] += subject.weekly_periods;
+				}
+
+				// Loop through divisions and assign teachers
+				for (const cls of stdClasses) {
+					let currentTeacher = assignedTeacher;
+
+					if (!currentTeacher) {
+						let attempts = 0;
+						while (attempts < regularTeachers.length) {
+							const candidate = regularTeachers[regularTeacherIndex];
+							const loadLimit = candidate.weeklyPeriods;
+							const currentLoad = teacherLoads[candidate.id];
+
+							if (currentLoad + subject.weekly_periods <= loadLimit) {
+								currentTeacher = candidate;
+								teacherLoads[candidate.id] += subject.weekly_periods;
+								break;
+							}
+
+							// Cycle to the next teacher
+							regularTeacherIndex = (regularTeacherIndex + 1) % regularTeachers.length;
+							attempts++;
+						}
+					}
+
+					if (!currentTeacher) {
+						// Fallback: if all teachers are full, pick the one with the lowest load
+						let bestCandidate = regularTeachers[0];
+						let minLoad = teacherLoads[bestCandidate.id];
+						for (const t of regularTeachers) {
+							if (teacherLoads[t.id] < minLoad) {
+								bestCandidate = t;
+								minLoad = teacherLoads[t.id];
+							}
+						}
+						currentTeacher = bestCandidate;
+						teacherLoads[currentTeacher.id] += subject.weekly_periods;
+					}
+
+					// Create the assignment document
+					const mapping = await TeacherSubject.create({
+						teacherId: currentTeacher.id,
+						teacherName: currentTeacher.name,
+						subjectId: subject._id.toString(),
+						subjectName: subject.subject_name,
+						standard: standard,
+						classId: cls._id.toString(),
+						className: cls.full_name,
+						preferredPeriods: [],
+						avoidPeriods: [],
+						consecutivePeriods: subject.consecutive_periods
+					});
+
+					createdMappings.push(mapping);
+
+					// For standard subjects, we can reuse the same teacher for other divisions of this standard
+					if (!assignedTeacher && teacherLoads[currentTeacher.id] >= currentTeacher.weeklyPeriods - 6) {
+						regularTeacherIndex = (regularTeacherIndex + 1) % regularTeachers.length;
+					}
+				}
+			}
+		}
+
+		console.log(`✅ Auto-assignment generated ${createdMappings.length} mappings.`);
 		return res.json({
 			success: true,
-			message: `Deleted ${result.deletedCount} teacher-subject mappings`,
-			deletedCount: result.deletedCount
+			message: `Successfully allocated subjects randomly! Generated ${createdMappings.length} mappings.`,
+			addedCount: createdMappings.length
 		});
 	} catch (error) {
-		console.error('Error deleting all teacher-subject mappings:', error);
-		return res.status(500).json({ error: 'Failed to delete all teacher-subject mappings' });
+		console.error('❌ Auto-assignment route failed:', error);
+		return res.status(500).json({ error: 'Auto-assignment failed: ' + error.message });
 	}
 });
 

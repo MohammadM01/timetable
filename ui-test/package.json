@@ -1,0 +1,7 @@
+{
+  "name": "ui-test",
+  "type": "module",
+  "dependencies": {
+    "puppeteer": "^25.0.4"
+  }
+}

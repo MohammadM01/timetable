@@ -3,6 +3,7 @@ import { SchoolContext } from '../SchoolContext';
 import { saveSubjects, fetchSubjects, deleteSubject, updateSubject, deleteAllSubjects } from '../utils/api';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
+import { FaFileUpload, FaDownload } from 'react-icons/fa';
 
 const SubjectSetup = () => {
   const { addSubjects } = useContext(SchoolContext);
@@ -300,36 +301,27 @@ const SubjectSetup = () => {
       <h2 className="text-3xl font-bold text-purple-600 mb-6">Subject Setup</h2>
 
       {/* Bulk Upload Section */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl text-[#3b82f6] font-medium">Bulk Upload Subjects</h2>
+      <div className="bg-white p-6 rounded-lg shadow-lg mb-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-semibold text-blue-600">Bulk Upload Subjects</h3>
           <button
             onClick={handleDownloadTemplate}
-            className="bg-[#3b82f6] text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-blue-600 transition-colors"
+            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-300 ease-in-out transform hover:scale-105"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
+            <FaDownload className="mr-2" />
             Download Template
           </button>
         </div>
-
-        <div>
-          <input
-            type="file"
-            accept=".xlsx,.xls"
-            onChange={handleImportExcel}
-            className="hidden"
-            id="excel-import"
-          />
-          <label
-            htmlFor="excel-import"
-            className="bg-[#22c55e] text-white px-4 py-2 rounded inline-flex items-center gap-2 cursor-pointer hover:bg-green-600 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-            </svg>
+        <div className="flex items-center">
+          <label className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 cursor-pointer transition duration-300 ease-in-out transform hover:scale-105">
+            <FaFileUpload className="mr-2" />
             Upload Excel File
+            <input
+              type="file"
+              accept=".xlsx, .xls"
+              onChange={handleImportExcel}
+              className="hidden"
+            />
           </label>
         </div>
       </div>

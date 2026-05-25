@@ -24,10 +24,19 @@ const SubjectAssignment = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedTeacher, setSelectedTeacher] = useState('');
   const [selectedSubject, setSelectedSubject] = useState('');
+  const [selectedClass, setSelectedClass] = useState('');
 
   // Upload states
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [uploadFile, setUploadFile] = useState(null);
+
+  const romanToVal = (roman) => {
+    const map = {
+      'I': 1, 'II': 2, 'III': 3, 'IV': 4, 'V': 5,
+      'VI': 6, 'VII': 7, 'VIII': 8, 'IX': 9, 'X': 10
+    };
+    return map[String(roman).trim().toUpperCase()] || 0;
+  };
 
   // Fetch initial data
   useEffect(() => {
@@ -56,7 +65,17 @@ const SubjectAssignment = () => {
         }
         const subjectsData = await subjectsResponse.json();
         console.log('Subjects fetched:', subjectsData);
-        setSubjects(subjectsData);
+        
+        // Sort subjects in ascending order V -> VI -> VII -> VIII -> IX -> X
+        const sortedSubjects = subjectsData.sort((a, b) => {
+          const valA = romanToVal(a.standard);
+          const valB = romanToVal(b.standard);
+          if (valA !== valB) {
+            return valA - valB;
+          }
+          return (a.subject_name || '').localeCompare(b.subject_name || '');
+        });
+        setSubjects(sortedSubjects);
 
         // Fetch classes
         console.log('Fetching classes...');
@@ -66,16 +85,15 @@ const SubjectAssignment = () => {
         }
         const classesData = await classesResponse.json();
         console.log('Classes fetched:', classesData);
+        
+        // Sort classes in ascending order by Roman numeral grade and then division
         const sortedClasses = classesData.sort((a, b) => {
-          const standardA = a.standard.toLowerCase();
-          const standardB = b.standard.toLowerCase();
-          const divisionA = a.division.toLowerCase();
-          const divisionB = b.division.toLowerCase();
-
-          if (standardA !== standardB) {
-            return standardA.localeCompare(standardB);
+          const valA = romanToVal(a.standard);
+          const valB = romanToVal(b.standard);
+          if (valA !== valB) {
+            return valA - valB;
           }
-          return divisionA.localeCompare(divisionB);
+          return (a.division || '').localeCompare(b.division || '');
         });
         setClasses(sortedClasses);
 
@@ -102,13 +120,24 @@ const SubjectAssignment = () => {
     fetchData();
   }, []);
 
+  const getFilteredClassesForSelectedSubject = () => {
+    if (!selectedSubject) return [];
+    const subjectObj = subjects.find(s => s.id === selectedSubject);
+    if (!subjectObj) return [];
+    return classes.filter(cls => cls.standard === subjectObj.standard);
+  };
+
   // Filter assignments based on current filters
   const getFilteredAssignments = () => {
     let filtered = assignments;
     console.log('Initial assignments for filtering:', assignments);
 
     if (filterTeacher) {
-      filtered = filtered.filter(a => a.teacherId === parseInt(filterTeacher));
+      filtered = filtered.filter(a => 
+        filterTeacher === 'principal' 
+          ? a.teacherId === 'principal' 
+          : a.teacherId === parseInt(filterTeacher)
+      );
       console.log('After teacher filter:', filtered);
     }
 
@@ -204,8 +233,9 @@ const SubjectAssignment = () => {
       }
 
       const payload = {
-        teacherId: parseInt(selectedTeacher),
+        teacherId: selectedTeacher === 'principal' ? 'principal' : parseInt(selectedTeacher),
         subjectId: selectedSubject,
+        classId: selectedClass || null,
         preferredPeriods: [],
         avoidPeriods: [],
         consecutivePeriods: false
@@ -242,6 +272,7 @@ const SubjectAssignment = () => {
       setSuccess('Assignment added successfully!');
       setSelectedTeacher('');
       setSelectedSubject('');
+      setSelectedClass('');
       setShowAddForm(false);
 
     } catch (error) {
@@ -290,6 +321,33 @@ const SubjectAssignment = () => {
     }
   };
 
+  const handleAutoAssign = async () => {
+    const confirmMessage = "Are you sure you want to randomly assign subjects to teachers? This will clear all current assignments and allocate subjects based on teachers' capacities and standards.";
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError('');
+      setSuccess('');
+
+      const result = await api.autoAssignTeacherSubjects();
+      
+      // Refresh assignments
+      const assignmentsResponse = await fetch(`http://localhost:5000/api/teacher-subjects?t=${Date.now()}`);
+      const assignmentsData = await assignmentsResponse.json();
+      setAssignments(assignmentsData);
+
+      setSuccess(result.message || `Successfully randomly assigned ${result.addedCount} subjects!`);
+      setLoading(false);
+    } catch (err) {
+      console.error('Error auto-assigning subjects:', err);
+      setError(err.message || 'Failed to auto-assign subjects');
+      setLoading(false);
+    }
+  };
+
   const handleFileUpload = async (e) => {
     e.preventDefault();
     if (!uploadFile) {
@@ -328,7 +386,7 @@ const SubjectAssignment = () => {
 
 
   const getUniqueStandards = () => {
-    return [...new Set(subjects.map(s => s.standard))].sort();
+    return [...new Set(subjects.map(s => s.standard))].sort((a, b) => romanToVal(a) - romanToVal(b));
   };
 
   if (loading) {
@@ -375,6 +433,13 @@ const SubjectAssignment = () => {
             >
               {showUploadForm ? 'Cancel' : '📁 Upload Sheet'}
             </button>
+
+            <button
+              onClick={handleAutoAssign}
+              className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-300 transition duration-200"
+            >
+              🪄 Random Auto-Assign
+            </button>
           </div>
 
           {assignments.length > 0 && (
@@ -393,7 +458,7 @@ const SubjectAssignment = () => {
         <div className="bg-white p-6 rounded-lg shadow-lg mb-6">
           <h3 className="text-xl font-semibold mb-4 text-gray-800">Add New Assignment</h3>
           <form onSubmit={handleAddAssignment} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* Teacher Selection */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -433,12 +498,33 @@ const SubjectAssignment = () => {
                   ))}
                 </select>
               </div>
+
+              {/* Class/Division Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Select Class / Division
+                </label>
+                <select
+                  value={selectedClass}
+                  onChange={(e) => setSelectedClass(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  required
+                  disabled={!selectedSubject}
+                >
+                  <option value="">{selectedSubject ? "Choose class..." : "Select subject first"}</option>
+                  {getFilteredClassesForSelectedSubject().map(cls => (
+                    <option key={cls.id} value={cls.id}>
+                      {cls.full_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div className="flex justify-end">
               <button
                 type="submit"
-                disabled={!selectedTeacher || !selectedSubject}
+                disabled={!selectedTeacher || !selectedSubject || (getFilteredClassesForSelectedSubject().length > 0 && !selectedClass)}
                 className="px-8 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:bg-gray-400 disabled:cursor-not-allowed transition duration-200"
               >
                 Add Assignment
@@ -607,7 +693,7 @@ const SubjectAssignment = () => {
                           <div key={assignment.id} className="bg-gray-50 p-3 rounded-lg flex justify-between items-center">
                             <div>
                               <p className="font-medium text-gray-900">{subject?.subject_name}</p>
-                              <p className="text-sm text-gray-600">Grade {assignment.standard}</p>
+                              <p className="text-sm text-gray-600">Class: {assignment.className || `Grade ${assignment.standard}`}</p>
                             </div>
                             <button
                               onClick={() => handleDelete(assignment.id)}
@@ -648,7 +734,7 @@ const SubjectAssignment = () => {
                           <div key={assignment.id} className="bg-gray-50 p-3 rounded-lg flex justify-between items-center">
                             <div>
                               <p className="font-medium text-gray-900">{teacher?.name}</p>
-                              <p className="text-sm text-gray-600">Grade {assignment.standard}</p>
+                              <p className="text-sm text-gray-600">Class: {assignment.className || `Grade ${assignment.standard}`}</p>
                             </div>
                             <button
                               onClick={() => handleDelete(assignment.id)}
@@ -688,7 +774,7 @@ const SubjectAssignment = () => {
                           <div key={assignment.id} className="bg-gray-50 p-3 rounded-lg flex justify-between items-center">
                             <div>
                               <p className="font-medium text-gray-900">{teacher?.name}</p>
-                              <p className="text-sm text-gray-600">{subject?.subject_name}</p>
+                              <p className="text-sm text-gray-600">{subject?.subject_name} • {assignment.className || `Grade ${assignment.standard}`}</p>
                             </div>
                             <button
                               onClick={() => handleDelete(assignment.id)}
