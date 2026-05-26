@@ -19,12 +19,12 @@ const Sidebar = () => {
 
   return (
     <aside 
-      className={`relative z-20 border-r border-white/70 bg-white/76 shadow-2xl shadow-slate-200/60 backdrop-blur-2xl transition-all duration-300 ease-in-out ${
+      className={`relative z-20 border-r border-[#e6d5c3] bg-[#F5E9D9] transition-all duration-300 ease-in-out ${
         isCollapsed ? "w-20" : "w-64"
       }`}
     >
       <div className="flex flex-col h-full">
-        <div className="flex items-center justify-between p-4 border-b border-white/70">
+        <div className="flex items-center justify-between p-4 border-b border-slate-200">
           {!isCollapsed && (
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.26em] text-cyan-700">Scholara</p>
@@ -33,7 +33,7 @@ const Sidebar = () => {
           )}
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="rounded-2xl border border-white/80 bg-white/80 p-2 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-cyan-50"
+            className="rounded-2xl border border-slate-200 bg-white p-2 shadow-sm transition-all duration-200 hover:bg-cyan-50"
             aria-label="Toggle sidebar"
           >
             <svg
@@ -63,7 +63,7 @@ const Sidebar = () => {
                 `mb-2 flex items-center rounded-2xl px-3 py-3 text-sm font-semibold transition-all duration-200 ${
                   isActive
                     ? "bg-slate-700 text-white shadow-sm"
-                    : "text-slate-600 hover:bg-white/85 hover:text-slate-950"
+                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
                 }`
               }
             >
@@ -89,8 +89,8 @@ const Sidebar = () => {
           ))}
         </nav>
 
-        <div className="p-4 border-t border-white/70">
-          <div className="flex items-center rounded-3xl border border-white/80 bg-white/80 p-3 shadow-sm">
+        <div className="p-4 border-t border-slate-200">
+          <div className="flex items-center rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
             <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-black shadow-lg shadow-cyan-200">
               P
             </div>

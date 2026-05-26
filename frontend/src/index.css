@@ -9,8 +9,6 @@
   --ink: #0f172a;
   --muted: #64748b;
   --line: rgba(148, 163, 184, 0.24);
-  --glass: rgba(255, 255, 255, 0.78);
-  --glass-strong: rgba(255, 255, 255, 0.92);
   --cyan: #06b6d4;
   --blue: #2563eb;
   --emerald: #10b981;
@@ -51,11 +49,11 @@
   main textarea {
     width: 100%;
     border-radius: 1rem;
-    border: 1px solid rgba(148, 163, 184, 0.34);
-    background: rgba(255, 255, 255, 0.84);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 10px 28px rgba(15, 23, 42, 0.04);
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
     color: #0f172a;
-    transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+    transition: border-color 180ms ease, box-shadow 180ms ease;
   }
 
   main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus,
@@ -72,7 +70,7 @@
   }
 
   main thead {
-    background: rgba(248, 250, 252, 0.86);
+    background: #f8fafc;
   }
 
   main th {
@@ -87,10 +85,7 @@
 @layer components {
   .app-main-surface {
     @apply flex-1 overflow-y-auto p-4 md:p-6;
-    background:
-      linear-gradient(120deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.16)),
-      radial-gradient(circle at top left, rgba(6, 182, 212, 0.14), transparent 28rem),
-      radial-gradient(circle at bottom right, rgba(251, 146, 60, 0.12), transparent 26rem);
+    background: #F5E9D9;
   }
 
   .page-shell {
@@ -100,36 +95,28 @@
   .hero-panel,
   .glass-panel,
   .card {
-    border: 1px solid rgba(255, 255, 255, 0.72);
-    background: var(--glass);
-    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(22px);
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
   }
 
   .hero-panel {
-    @apply relative overflow-hidden rounded-[2rem] p-6 md:p-8;
+    @apply relative overflow-hidden rounded-2xl p-6 md:p-8;
   }
 
   .hero-panel::before {
-    content: "";
-    position: absolute;
-    inset: -40% auto auto 56%;
-    width: 22rem;
-    height: 22rem;
-    border-radius: 999px;
-    background: radial-gradient(circle, rgba(6, 182, 212, 0.22), transparent 66%);
-    pointer-events: none;
+    display: none;
   }
 
   .glass-panel,
   .card {
-    @apply rounded-[1.75rem] p-5 md:p-6 transition-all duration-300;
+    @apply rounded-2xl p-5 md:p-6 transition-all duration-200;
   }
 
   .card:hover,
   .glass-panel:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 30px 90px rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
   }
 
   .btn-primary,
@@ -168,7 +155,7 @@
   }
 
   .nav-link {
-    @apply rounded-full px-4 py-2 text-sm font-semibold text-slate-600 transition-all duration-200 hover:bg-white/80 hover:text-slate-950;
+    @apply rounded-full px-4 py-2 text-sm font-semibold text-slate-600 transition-all duration-200 hover:bg-white hover:text-slate-950;
   }
 
   .section-title {
@@ -184,30 +171,30 @@
   }
 
   .soft-table {
-    @apply overflow-hidden rounded-[1.5rem] border border-white/70 bg-white/80 shadow-xl shadow-slate-100/60;
+    @apply overflow-hidden rounded-2xl border border-slate-200 bg-white;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
   }
 
   .soft-table tbody tr {
-    transition: background-color 160ms ease, transform 160ms ease;
+    transition: background-color 160ms ease;
   }
 
   .soft-table tbody tr:hover {
-    background: rgba(236, 254, 255, 0.58);
+    background: #f1f5f9;
   }
 
   main .bg-white.shadow-lg,
   main .bg-white.shadow-xl,
   main .bg-white.rounded-lg,
   main .bg-gray-50.rounded-lg {
-    border: 1px solid rgba(255, 255, 255, 0.72);
-    border-radius: 1.75rem !important;
-    background: rgba(255, 255, 255, 0.82) !important;
-    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
-    backdrop-filter: blur(20px);
+    border: 1px solid #e2e8f0;
+    border-radius: 1rem !important;
+    background: #ffffff !important;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06) !important;
   }
 
   main .bg-gray-50 {
-    background-color: rgba(248, 250, 252, 0.72);
+    background-color: #f8fafc;
   }
 
   main .bg-blue-600,
@@ -249,7 +236,7 @@
   }
 
   main tbody tr:hover {
-    background-color: rgba(236, 254, 255, 0.62);
+    background-color: #f1f5f9;
   }
 
   .constraint-chip {
@@ -324,4 +311,48 @@ h4,
 .glass-panel h3,
 main h2 {
   color: #334155 !important;
+}
+
+/* ═══════════════════════════════════════════════
+   GLOBAL: Kill ALL glassmorphism effects app-wide
+   ═══════════════════════════════════════════════ */
+
+/* Remove backdrop-blur from everything */
+* {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* Replace ALL semi-transparent white backgrounds with solid white */
+[class*="bg-white/"],
+[class*="bg-white\\/"] {
+  background-color: #ffffff !important;
+}
+
+/* Replace ALL semi-transparent white borders with solid slate borders */
+[class*="border-white/"],
+[class*="border-white\\/"] {
+  border-color: #e2e8f0 !important;
+}
+
+/* Flatten exaggerated shadows into subtle ones */
+[class*="shadow-2xl"],
+[class*="shadow-xl"] {
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.07) !important;
+}
+
+/* Fix rounded corners — no extreme rounding */
+[class*="rounded-[2rem]"],
+[class*="rounded-[1.75rem]"],
+[class*="rounded-3xl"] {
+  border-radius: 1rem !important;
+}
+
+/* Ensure colored shadow classes don't produce tinted halos */
+[class*="shadow-cyan"],
+[class*="shadow-sky"],
+[class*="shadow-purple"],
+[class*="shadow-slate-100"],
+[class*="shadow-slate-200"] {
+  --tw-shadow-color: transparent !important;
 }

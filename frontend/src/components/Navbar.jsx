@@ -10,7 +10,7 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="relative z-10 border-b border-white/70 bg-white/72 px-4 py-3 shadow-xl shadow-slate-100/60 backdrop-blur-2xl">
+    <nav className="relative z-10 border-b border-[#e6d5c3] bg-[#F5E9D9] px-4 py-3">
       <div className="flex justify-between items-center gap-4">
         <div className="flex items-center space-x-4">
           <div>
@@ -27,7 +27,7 @@ const Navbar = () => {
         <div className="flex items-center space-x-4">
           <div className="relative">
             <button 
-              className="relative rounded-2xl border border-white/80 bg-white/85 p-2 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-cyan-50"
+              className="relative rounded-2xl border border-slate-200 bg-white p-2 shadow-sm transition-all duration-200 hover:bg-cyan-50"
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
             >
               <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white"></span>
@@ -36,7 +36,7 @@ const Navbar = () => {
               </svg>
             </button>
             {isDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-64 rounded-3xl border border-white/80 bg-white/92 p-3 shadow-2xl shadow-slate-200/80 backdrop-blur-xl z-50">
+              <div className="absolute right-0 mt-2 w-64 rounded-2xl border border-slate-200 bg-white p-3 shadow-lg z-50">
                 <div className="rounded-2xl bg-cyan-50 px-4 py-3 text-sm font-bold text-cyan-900">All constraints ready for validation.</div>
               </div>
             )}
