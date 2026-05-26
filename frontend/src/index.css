@@ -208,15 +208,15 @@
   }
 
   main .bg-blue-600 {
-    background: #0284c7 !important;
+    background: #0f8ac7 !important;
   }
 
   main .bg-purple-600 {
-    background: #7c3aed !important;
+    background: #af8cea !important;
   }
 
   main .bg-green-600 {
-    background: #059669 !important;
+    background: #3dc69b !important;
   }
 
   main .bg-orange-600 {
@@ -280,7 +280,7 @@
 ::-webkit-scrollbar-thumb {
   border: 2px solid rgba(226, 232, 240, 0.7);
   border-radius: 999px;
-  background: linear-gradient(180deg, #38bdf8, #14b8a6);
+  background: linear-gradient(180deg, #45c4fb, #27e7d1);
 }
 
 /* App-wide background overrides for the beautiful cream theme */
@@ -289,7 +289,7 @@ body,
 main,
 main.flex-1,
 .app-main-surface {
-  background-color: #F5E9D9 !important;
+  background-color: #f3e9dd !important;
   background-image: none !important;
 }
 
@@ -323,10 +323,10 @@ main h2 {
   backdrop-filter: none !important;
 }
 
-/* Replace ALL semi-transparent white backgrounds with solid white */
+/* Replace ALL semi-transparent white backgrounds with very light blue */
 [class*="bg-white/"],
 [class*="bg-white\\/"] {
-  background-color: #ffffff !important;
+  background-color: #99c1ee !important;
 }
 
 /* Replace ALL semi-transparent white borders with solid slate borders */
@@ -355,4 +355,18 @@ main h2 {
 [class*="shadow-slate-100"],
 [class*="shadow-slate-200"] {
   --tw-shadow-color: transparent !important;
+}
+
+/* Fix delete/danger button text visibility */
+main .bg-red-600,
+main .bg-red-500,
+.btn-error,
+.btn-danger {
+  color: #ffffff !important;
+}
+main .bg-red-600 *,
+main .bg-red-500 *,
+.btn-error *,
+.btn-danger * {
+  color: #ffffff !important;
 }
