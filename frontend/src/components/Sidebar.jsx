@@ -1,6 +1,7 @@
 import React, { useState, useContext } from "react";
 import { NavLink } from "react-router-dom";
 import { SchoolContext } from "../SchoolContext";
+import { UserCircle } from "lucide-react";
 
 const Sidebar = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -93,8 +94,8 @@ const Sidebar = () => {
 
         <div className="p-4 border-t border-slate-200">
           <div className="flex items-center rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-            <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-black shadow-lg shadow-cyan-200">
-              P
+            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 border border-slate-200">
+              <UserCircle className="w-6 h-6 text-slate-500" strokeWidth={2} />
             </div>
             {!isCollapsed && (
               <div className="ml-3">
